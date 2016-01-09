@@ -2,6 +2,7 @@ package goro
 
 import (
 	"net/http"
+	"regexp"
 )
 
 // DomainMap - maps (sub)domains to routers
@@ -11,20 +12,20 @@ type DomainMap struct {
 	matchedHosts       map[string]*Router
 
 	// NotFoundHandler - if the (sub)domain is not mapped, call this handler
-	NotFoundHandler http.Handler
+	NotFoundHandler http.HandlerFunc
 }
 
 // New - creates a new domain map
-func New() *DomainMap {
+func NewDomainMap() *DomainMap {
 	return &DomainMap{
 		registeredPatterns: make(map[string]*Router),
-		MatchedHosts:       make(map[string]*Router),
+		matchedHosts:       make(map[string]*Router),
 	}
 }
 
 // InvalidateMatchedHosts - resets any matched (sub)domains that have been cached
 func (domainMap *DomainMap) InvalidateMatchedHosts() {
-	domainMap.MatchedHosts = make(map[string]*Router)
+	domainMap.matchedHosts = make(map[string]*Router)
 }
 
 func (domainMap *DomainMap) RegisterRouter(pattern string, router *Router) {
@@ -34,7 +35,7 @@ func (domainMap *DomainMap) RegisterRouter(pattern string, router *Router) {
 
 func (domainMap *DomainMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// check cached handlers (keyed on host)
-	for host, router := range domainMap.MatchedHosts {
+	for host, router := range domainMap.matchedHosts {
 		if r.Host == host {
 			router.ServeHTTP(w, r)
 			return
@@ -46,15 +47,15 @@ func (domainMap *DomainMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if regex.MatchString(r.Host) {
 			router := domainMap.registeredPatterns[pattern]
 			router.ServeHTTP(w, r)
-			domainMap.MatchedHosts[r.Host] = router
+			domainMap.matchedHosts[r.Host] = router
 			return
 		}
 	}
 
-	if domainMap.FailHandler != nil {
-		domainMap.FailHandler(w, r)
+	if domainMap.NotFoundHandler != nil {
+		domainMap.NotFoundHandler(w, r)
 	} else {
-		// no matches found. fail.
+		// no handler & no matches found. fail.
 		http.Error(w, "Forbidden", 403)
 	}
 }
