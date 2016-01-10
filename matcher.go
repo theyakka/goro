@@ -1,6 +1,8 @@
 package goro
 
-import ()
+import (
+	"strings"
+)
 
 type StringRange struct {
 	Start  int
@@ -27,8 +29,8 @@ type Matcher struct {
 // --
 
 // NewMatcher - creates a new default Matcher instance
-func NewMatcher(stringValue string, startDelim string, endDelim string) Matcher {
-	m := Matcher{
+func NewMatcher(stringValue string, startDelim string, endDelim string) *Matcher {
+	m := &Matcher{
 		inMatch:     false,
 		startIndex:  0,
 		stringValue: stringValue,
@@ -48,19 +50,26 @@ func (m *Matcher) NextMatch() Match {
 	}
 
 	startIdx, str := 0, m.stringValue[m.startIndex:]
+	rangeStart := 0
 	for cidx, c := range str {
 		if !m.inMatch && string(c) == m.startDelim {
 			m.inMatch = true
 			startIdx = cidx
+			rangeStart = cidx + m.startIndex
 		} else if m.inMatch && string(c) == m.endDelim {
+			nextIndex := cidx + 1
 			m.inMatch = false
-			m.startIndex = cidx + 1
+			m.startIndex = m.startIndex + nextIndex
+			val := str[startIdx:nextIndex]
 			matchType := "wildcard"
+			if strings.HasPrefix(val, "{$") {
+				matchType = "variable"
+			}
 			match := Match{
 				Type:          matchType,
-				OriginalValue: str,
-				Value:         str[startIdx : cidx+1],
-				Range:         NewStringRange(startIdx, cidx-startIdx),
+				OriginalValue: m.stringValue,
+				Value:         val,
+				Range:         NewStringRange(rangeStart, nextIndex-startIdx),
 			}
 			return match
 		}

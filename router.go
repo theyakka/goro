@@ -1,6 +1,7 @@
 package goro
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 )
@@ -19,7 +20,14 @@ type Router struct {
 
 	// RouteFilters - the registered route filters
 	RouteFilters []Filter
-	Context      ContextInterface
+
+	// Context - used to store context during the router lifecycle
+	Context ContextInterface
+
+	// RedirectTrailingSlash - should we redirect a requested path with a trailing
+	// slash to a defined route without the slash (if one exists)? Will use code 301
+	// for GET and 307 otherwise
+	RedirectTrailingSlash bool
 }
 
 func NewRouter() Router {
@@ -63,6 +71,7 @@ func (r *Router) PUT(path string, handler http.Handler) {
 }
 
 func (r *Router) Route(method string, path string, handler http.Handler) {
+
 	// hasWildcard := isWildcardPath(path)
 	// addRoute := route{
 	// 	PathFormat: path, Method: method,
@@ -83,4 +92,28 @@ func isWildcardPath(path string) bool {
 
 func (r *route) substituteVariables(variables map[string]interface{}) {
 
+}
+
+func parsePath(path string) (finalPath string, wildcards []Match, parseErr error) {
+	if !strings.HasPrefix(path, "/") {
+		// missing slash at the start, we aaaaare out
+		return "", []Match{}, errors.New("Path is missing leading slash ('/')")
+	}
+
+	hasWildcard := (strings.Index(path, "{") != -1)
+	if !hasWildcard {
+		// no wildcards, return now
+		return path, []Match{}, nil
+	}
+
+	outPath := path
+	wildcardMatches := make([]Match, 0)
+	matcher := NewMatcher(outPath, "{", "}")
+
+	match := matcher.NextMatch()
+	for match != NotFoundMatch() {
+		wildcardMatches = append(wildcardMatches, match)
+		match = matcher.NextMatch()
+	}
+	return outPath, wildcardMatches, nil
 }
