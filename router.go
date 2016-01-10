@@ -7,10 +7,11 @@ import (
 )
 
 type route struct {
-	Method      string
-	PathFormat  string
-	HasWildcard bool
-	Handler     http.Handler
+	Method       string
+	PathFormat   string
+	HasWildcards bool
+	Wildcards    []Match
+	Handler      http.Handler
 }
 
 type Router struct {
@@ -84,11 +85,17 @@ func (r *Router) PUT(path string, handler http.Handler) {
 
 func (r *Router) Route(method string, path string, handler http.Handler) {
 
-	// hasWildcard := isWildcardPath(path)
-	// addRoute := route{
-	// 	PathFormat: path, Method: method,
-	// 	HasWildcard: hasWildcard, Handler: handler,
-	// }
+	wildcards, wcErr := findWildcards(path)
+	if wcErr != nil {
+		// TODO - error
+	}
+	addRoute := route{
+		Method:       method,
+		PathFormat:   path,
+		HasWildcards: len(wildcards) > 0,
+		Wildcards:    wildcards,
+		Handler:      handler,
+	}
 
 }
 
@@ -106,26 +113,25 @@ func (r *route) substituteVariables(variables map[string]interface{}) {
 
 }
 
-func parsePath(path string) (finalPath string, wildcards []Match, parseErr error) {
+func findWildcards(path string) (wildcards []Match, parseErr error) {
 	if !strings.HasPrefix(path, "/") {
 		// missing slash at the start, we aaaaare out
-		return "", []Match{}, errors.New("Path is missing leading slash ('/')")
+		return []Match{}, errors.New("Path is missing leading slash ('/')")
 	}
 
 	hasWildcard := (strings.Index(path, "{") != -1)
 	if !hasWildcard {
 		// no wildcards, return now
-		return path, []Match{}, nil
+		return []Match{}, nil
 	}
 
-	outPath := path
 	wildcardMatches := make([]Match, 0)
-	matcher := NewMatcher(outPath, "{", "}")
+	matcher := NewMatcher(path, "{", "}")
 
 	match := matcher.NextMatch()
 	for match != NotFoundMatch() {
 		wildcardMatches = append(wildcardMatches, match)
 		match = matcher.NextMatch()
 	}
-	return outPath, wildcardMatches, nil
+	return wildcardMatches, nil
 }
