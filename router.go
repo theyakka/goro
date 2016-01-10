@@ -27,16 +27,28 @@ type Router struct {
 	// RedirectTrailingSlash - should we redirect a requested path with a trailing
 	// slash to a defined route without the slash (if one exists)? Will use code 301
 	// for GET and 307 otherwise
-	RedirectTrailingSlash bool
+	ShouldRedirectTrailingSlash bool
+
+	// NotFoundHandler - route / resource not found handler
+	NotFoundHandler http.Handler
+
+	// MethodNotAllowedHandler - if defined, will be hit wen requesting a defined route
+	// via a non-defined http method (e.g.: requesting via POST when only GET is defined).
+	// if not defined, we will fallback to the NotFoundHandler
+	MethodNotAllowedHandler http.Handler
+
+	// PanicHandler - handler for when things gets real
+	PanicHandler http.Handler
 }
 
 func NewRouter() Router {
-	router := Router{}
-	router.RouteFilters = []Filter{}
-	router.routeCache = make(map[string]route)
-	router.registedRoutes = make(map[string][]route)
-	router.variables = make(map[string]interface{})
-	return router
+	return Router{
+		routeCache:                  make(map[string]route),
+		registedRoutes:              make(map[string][]route),
+		variables:                   make(map[string]interface{}),
+		ShouldRedirectTrailingSlash: true,
+		RouteFilters:                []Filter{},
+	}
 }
 
 // variable registration
