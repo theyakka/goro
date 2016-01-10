@@ -2,6 +2,7 @@ package goro
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 )
@@ -11,7 +12,7 @@ type route struct {
 	PathFormat   string
 	HasWildcards bool
 	Wildcards    []Match
-	Handler      http.Handler
+	Handler      http.HandlerFunc
 }
 
 type Router struct {
@@ -31,15 +32,15 @@ type Router struct {
 	ShouldRedirectTrailingSlash bool
 
 	// NotFoundHandler - route / resource not found handler
-	NotFoundHandler http.Handler
+	NotFoundHandler http.HandlerFunc
 
 	// MethodNotAllowedHandler - if defined, will be hit wen requesting a defined route
 	// via a non-defined http method (e.g.: requesting via POST when only GET is defined).
 	// if not defined, we will fallback to the NotFoundHandler
-	MethodNotAllowedHandler http.Handler
+	MethodNotAllowedHandler http.HandlerFunc
 
 	// PanicHandler - handler for when things gets real
-	PanicHandler http.Handler
+	PanicHandler http.HandlerFunc
 }
 
 func NewRouter() Router {
@@ -54,36 +55,43 @@ func NewRouter() Router {
 
 // variable registration
 func (r *Router) AddStringVar(variable string, value string) {
-	r.variables[variable] = value
+	wrappedVarName := value
+	if strings.HasPrefix(variable, "$") {
+		wrappedVarName = "{" + variable + "}"
+	} else if !strings.HasPrefix(variable, "{$") {
+		wrappedVarName = "{$" + variable + "}"
+	}
+	fmt.Printf("wrapped var = %s\n", wrappedVarName)
+	r.variables[wrappedVarName] = value
 }
 
 // route registration
 // DELETE - Convenience func for a call using the http DELETE method
-func (r *Router) DELETE(path string, handler http.Handler) {
+func (r *Router) DELETE(path string, handler http.HandlerFunc) {
 	r.Route("DELETE", path, handler)
 }
 
 // GET - Convenience func for a call using the http GET method
-func (r *Router) GET(path string, handler http.Handler) {
+func (r *Router) GET(path string, handler http.HandlerFunc) {
 	r.Route("GET", path, handler)
 }
 
 // PATCH - Convenience func for a call using the http PATCH method
-func (r *Router) PATCH(path string, handler http.Handler) {
+func (r *Router) PATCH(path string, handler http.HandlerFunc) {
 	r.Route("PATCH", path, handler)
 }
 
 // POST - Convenience func for a call using the http POST method
-func (r *Router) POST(path string, handler http.Handler) {
+func (r *Router) POST(path string, handler http.HandlerFunc) {
 	r.Route("POST", path, handler)
 }
 
 // PUT - Convenience func for a call using the http PUT method
-func (r *Router) PUT(path string, handler http.Handler) {
+func (r *Router) PUT(path string, handler http.HandlerFunc) {
 	r.Route("PUT", path, handler)
 }
 
-func (r *Router) Route(method string, path string, handler http.Handler) {
+func (r *Router) Route(method string, path string, handler http.HandlerFunc) {
 
 	routePath := path
 	wildcards, variables, wcErr := findWildcards(path)
@@ -161,4 +169,13 @@ func findWildcards(path string) (wildcards []Match, variables []Match, parseErr 
 		match = matcher.NextMatch()
 	}
 	return wildcardMatches, variableMatches, nil
+}
+
+func (r *Router) PrintRoutes() {
+	for k, routes := range r.registedRoutes {
+		fmt.Printf("%s:\n", k)
+		for _, match := range routes {
+			fmt.Printf("  - %s\n", match.PathFormat)
+		}
+	}
 }
