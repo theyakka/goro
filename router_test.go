@@ -2,7 +2,6 @@ package goro
 
 import (
 	"fmt"
-	"log"
 	"testing"
 )
 
@@ -16,19 +15,15 @@ func TestRouter(t *testing.T) {
 		"hello/{id}",
 		"/",
 		"/{something}",
-		"/users/{id}",
+		"/users/{$id_format}",
 		"/users/{first}.{second}",
 		"/users/{id}/{$operation}",
 		"/test/this/thing/{blah:[A-Z]+}",
 	}
 
 	for _, path := range paths {
-		_, wc, parseErr := parsePath(path)
-		log.Printf("Path = %s\n", path)
-		log.Printf("  - %v\n", wc)
-		if parseErr != nil {
-			log.Printf("  • Error: %s\n", parseErr)
-		}
+		router.GET(path, nil)
 	}
+	fmt.Printf("registered routes:\n%v", router.registedRoutes)
 	fmt.Printf("\n")
 }

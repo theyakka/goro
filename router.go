@@ -85,18 +85,31 @@ func (r *Router) PUT(path string, handler http.Handler) {
 
 func (r *Router) Route(method string, path string, handler http.Handler) {
 
-	wildcards, wcErr := findWildcards(path)
+	routePath := path
+	wildcards, variables, wcErr := findWildcards(path)
 	if wcErr != nil {
 		// TODO - error
 	}
+
 	addRoute := route{
 		Method:       method,
-		PathFormat:   path,
+		PathFormat:   routePath,
 		HasWildcards: len(wildcards) > 0,
 		Wildcards:    wildcards,
 		Handler:      handler,
 	}
 
+	if len(variables) > 0 {
+		routePath = r.substituteVariables(addRoute, variables)
+		addRoute.PathFormat = routePath
+	}
+
+	methodRoutes := r.registedRoutes[method]
+	if methodRoutes == nil {
+		methodRoutes = make([]route, 0)
+	}
+	methodRoutes = append(methodRoutes, addRoute)
+	r.registedRoutes[method] = methodRoutes
 }
 
 // ServeHTTP -
@@ -109,29 +122,43 @@ func isWildcardPath(path string) bool {
 	return strings.Index(path, "{") != -1
 }
 
-func (r *route) substituteVariables(variables map[string]interface{}) {
-
+func (r *Router) substituteVariables(rte route, variables []Match) string {
+	// iterate the variables in reverse order so that we match back to front
+	// this will preserve the match ranges compared to the modified final path
+	finalPath := rte.PathFormat
+	for _, variable := range variables {
+		variableVal := r.variables[variable.Value]
+		if variableVal != nil {
+			finalPath = strings.Replace(finalPath, variable.Value, variableVal.(string), -1)
+		}
+	}
+	return finalPath
 }
 
-func findWildcards(path string) (wildcards []Match, parseErr error) {
+func findWildcards(path string) (wildcards []Match, variables []Match, parseErr error) {
 	if !strings.HasPrefix(path, "/") {
 		// missing slash at the start, we aaaaare out
-		return []Match{}, errors.New("Path is missing leading slash ('/')")
+		return []Match{}, []Match{}, errors.New("Path is missing leading slash ('/')")
 	}
 
 	hasWildcard := (strings.Index(path, "{") != -1)
 	if !hasWildcard {
 		// no wildcards, return now
-		return []Match{}, nil
+		return []Match{}, []Match{}, nil
 	}
 
 	wildcardMatches := make([]Match, 0)
+	variableMatches := make([]Match, 0)
 	matcher := NewMatcher(path, "{", "}")
 
 	match := matcher.NextMatch()
 	for match != NotFoundMatch() {
-		wildcardMatches = append(wildcardMatches, match)
+		if match.Type == "wildcard" {
+			wildcardMatches = append(wildcardMatches, match)
+		} else {
+			variableMatches = append(variableMatches, match)
+		}
 		match = matcher.NextMatch()
 	}
-	return wildcardMatches, nil
+	return wildcardMatches, variableMatches, nil
 }
