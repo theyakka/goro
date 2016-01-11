@@ -205,10 +205,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	method := strings.ToUpper(req.Method)
 	routes := r.registedRoutes[method]
 
+	var doesMatch bool
+	var params map[string]interface{}
 	matchedRoute := NotFoundRoute()
 	for _, route := range routes {
-		doesMatch, params := route.MatchesPath(req.URL.Path)
-		fmt.Printf(" >>> %v\n", params)
+		doesMatch, params = route.MatchesPath(req.URL.Path)
 		if doesMatch {
 			matchedRoute = route
 			break
@@ -222,6 +223,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	if r.Context != nil {
 		r.Context.Put("matched_route", matchedRoute)
+		for k, v := range params {
+			fmt.Printf("k,v: %s, %v\n", stripTokenDelims(k), v)
+			r.Context.Put(stripTokenDelims(k), v)
+		}
 	}
 	fmt.Printf("context = %v\n", r.Context)
 	matchedRoute.Handler(w, req)
@@ -284,4 +289,9 @@ func findWildcards(path string) (wildcards []Match, variables []Match, parseErr 
 		match = matcher.NextMatch()
 	}
 	return wildcardMatches, variableMatches, nil
+}
+
+func stripTokenDelims(value string) string {
+	replacer := strings.NewReplacer("{", "", "}", "")
+	return replacer.Replace(value)
 }
