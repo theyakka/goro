@@ -10,8 +10,8 @@ type Context struct {
 	values map[string]interface{}
 }
 
-func NewContext() Context {
-	c := Context{
+func NewContext() *Context {
+	c := &Context{
 		values: make(map[string]interface{}),
 	}
 	return c

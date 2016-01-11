@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-var context Context
+var context *Context
 
 type mockResponseWriter struct{}
 
@@ -30,6 +30,9 @@ func testHandler(w http.ResponseWriter, r *http.Request) {
 	if matchedRoute != nil {
 		fmt.Printf("  - Route: %s\n", (matchedRoute.(route)).PathFormat)
 	}
+	if context != nil {
+		fmt.Printf("  - ID: %v\n", context.Get("id"))
+	}
 	fmt.Printf("  - Path: %s\n", r.URL.Path)
 }
 
@@ -44,21 +47,19 @@ func TestRouter(t *testing.T) {
 
 	context = NewContext()
 	router := NewRouter()
-	router.Context = &context
+	router.Context = context
 	router.NotFoundHandler = notFoundHandler
-	router.AddStringVar("id_format", "{id}")
-	router.AddStringVar("operation", "this_op")
-
-	fmt.Printf("Context ... %v\n", router.Context)
+	router.AddStringVar("$id_format", "{id}")
+	router.AddStringVar("$operation", "this_op")
 
 	paths := []string{
+		"/users/{$id_format}",
 		"hello",
 		"hello/{id}",
 		"/",
 		"/{something}",
-		"/users/{$id_format}",
+		"/users/{name}",
 		"/users/{$id_format}/{$operation}",
-		"/users/{first}.{second}",
 		"/test/this/thing/{blah:[A-Z]+}",
 	}
 
@@ -68,8 +69,7 @@ func TestRouter(t *testing.T) {
 
 	router.PrintRoutes()
 
-	checkPath := "/users/1345"
-	fmt.Printf("\nChecking path: %s\n", checkPath)
+	checkPath := "/users/aa-aaaa-aaaa/this_op"
 	w := new(mockResponseWriter)
 	req, _ := http.NewRequest("GET", checkPath, nil)
 	router.ServeHTTP(w, req)

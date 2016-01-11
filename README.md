@@ -14,7 +14,7 @@ Goro is a routing toolkit for Go web applications. It is designed to be fast yet
 
 **http.Handler compatible**
 
-Goro is fully compatible with standard Go `http.Handler` inferfaces. No messy wrapping.
+Goro is fully compatible with standard Go `http.Handler` inferfaces (if you're not using the `Chainer`). No wrapping, no mess, no fuss, no BS. 
 
 **Flexible route matching**
 
