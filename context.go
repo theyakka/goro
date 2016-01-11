@@ -11,8 +11,9 @@ type Context struct {
 }
 
 func NewContext() Context {
-	c := Context{}
-	c.Clear()
+	c := Context{
+		values: make(map[string]interface{}),
+	}
 	return c
 }
 

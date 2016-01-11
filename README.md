@@ -70,4 +70,12 @@ func main() {
 
 Straightforward as hell.
 
+**Reusing things**
+
+Sometimes you have a set of requirements that you use often. Goro makes re-using wildcards or substituting values easy.
+
+```go
+
+```
+
 
