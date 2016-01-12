@@ -64,11 +64,11 @@ func TestRouter(t *testing.T) {
 	router.NotFoundHandler = notFoundHandler
 	router.MethodNotAllowedHandler = notAllowedHandler
 	router.PanicHandler = panicHandler
+	router.ShouldRedirectTrailingSlash = true
 	router.AddStringVar("$id_format", "{id}")
 	router.AddStringVar("$operation", "this_op")
 
 	paths := []string{
-		"/users/{$id_format}",
 		"hello",
 		"hello/{id}",
 		"/",
@@ -76,6 +76,7 @@ func TestRouter(t *testing.T) {
 		"/users/{$id_format}/{$operation}",
 		"/test/this/thing/{blah:[A-Z]+}",
 		"/users/{name}",
+		"/users/{$id_format}",
 	}
 
 	for _, path := range paths {

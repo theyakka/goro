@@ -37,7 +37,7 @@ func NotFoundRoute() route {
 }
 
 // MatchesPath - check to see if the route matches the given path
-func (r *route) MatchesPath(path string) (bool, map[string]interface{}) {
+func (r *route) MatchesPath(path string, checkSlash bool) (bool, map[string]interface{}) {
 	// is exact match?
 	params := map[string]interface{}{}
 	if r.PathFormat == path {
@@ -47,22 +47,31 @@ func (r *route) MatchesPath(path string) (bool, map[string]interface{}) {
 	pathMatches := true
 	pathComps := strings.Split(path, "/")
 	routeComps := r.Components
+	deSlashedComps := []string{}
+	if checkSlash && strings.HasSuffix(path, "/") {
+		deSlashedPath := path[:len(path)-1]
+		deSlashedComps = strings.Split(deSlashedPath, "/")
+	}
 
 	// fmt.Printf("path comps = %v, %s\n", pathComps, path)
-	if len(pathComps) != len(routeComps) {
+	if len(pathComps) != len(routeComps) && len(deSlashedComps) != len(routeComps) {
 		// fmt.Printf(" mismatch: %d, %d\n", len(pathComps), len(routeComps))
 		return false, params
+	}
+	checkComps := pathComps
+	if len(pathComps) != len(routeComps) {
+		checkComps = deSlashedComps
 	}
 
 	for idx, comp := range routeComps {
 		if comp.Type == ComponentTypeSegment {
 			// fmt.Printf(" check: %s, %s\n", comp.Value, pathComps[idx])
-			if comp.Value != pathComps[idx] {
+			if comp.Value != checkComps[idx] {
 				return false, params
 			}
 		} else if comp.Type == ComponentTypeWildcard {
 			// TODO - parse wildcard format option
-			params[comp.Value] = pathComps[idx]
+			params[comp.Value] = checkComps[idx]
 		}
 	}
 	return pathMatches, params
@@ -198,6 +207,7 @@ func (r *Router) Route(method string, path string, handler http.HandlerFunc) err
 	return nil
 }
 
+// recoverError - recover from any errors and call the panic handler
 func (r *Router) recoverError(w http.ResponseWriter, req *http.Request) {
 	if rcv := recover(); rcv != nil {
 		r.PanicHandler(w, req)
@@ -206,14 +216,25 @@ func (r *Router) recoverError(w http.ResponseWriter, req *http.Request) {
 
 // ServeHTTP -
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if r.PanicHandler != nil {
-		defer r.recoverError(w, req)
-	}
-	if r.Context != nil {
-		defer r.Context.Clear(req)
+
+	useReq := req
+	usePath := useReq.URL.Path
+
+	// execute the pre-process filters before we use the request / path
+	if len(r.RouteFilters) > 0 {
+		for _, filter := range r.RouteFilters {
+			filter.ExecuteFilter(useReq, &usePath)
+		}
 	}
 
-	method := strings.ToUpper(req.Method)
+	if r.PanicHandler != nil {
+		defer r.recoverError(w, useReq)
+	}
+	if r.Context != nil {
+		defer r.Context.Clear(useReq)
+	}
+
+	method := strings.ToUpper(useReq.Method)
 	var routes []route
 
 	// if the method not allowed handler IS set, we should check ALL routes
@@ -229,10 +250,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var params map[string]interface{}
 	matchedRoute := NotFoundRoute()
 	for _, route := range routes {
-		doesMatch, params = route.MatchesPath(req.URL.Path)
+		doesMatch, params = route.MatchesPath(usePath, r.ShouldRedirectTrailingSlash)
 		if doesMatch {
-			if route.Method != req.Method {
-				r.MethodNotAllowedHandler(w, req)
+			if route.Method != useReq.Method {
+				r.MethodNotAllowedHandler(w, useReq)
 				return
 			}
 			matchedRoute = route
@@ -241,20 +262,20 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if r.NotFoundHandler != nil && matchedRoute.PathFormat == "" {
-		r.NotFoundHandler(w, req)
+		r.NotFoundHandler(w, useReq)
 		return
 	}
 
 	if r.Context != nil {
-		r.Context.Put(req, "matched_route", matchedRoute)
+		r.Context.Put(useReq, "matched_route", matchedRoute)
 		for k, v := range params {
-			r.Context.Put(req, stripTokenDelims(k), v)
+			r.Context.Put(useReq, stripTokenDelims(k), v)
 		}
 	}
 
-	matchedRoute.Handler(w, req)
+	matchedRoute.Handler(w, useReq)
 
-	// fmt.Printf("path = %s", req.URL.Path)
+	// fmt.Printf("path = %s", usePath)
 	// fmt.Printf("\n")
 	// fmt.Printf("Ya gotta serve somebody\n")
 }
