@@ -37,26 +37,28 @@ func NotFoundRoute() route {
 }
 
 // MatchesPath - check to see if the route matches the given path
-func (r *route) MatchesPath(path string, checkSlash bool) (bool, map[string]interface{}) {
+func (r *route) MatchesPath(path string, checkSlash bool) (bool, map[string]interface{}, int) {
 	// is exact match?
 	params := map[string]interface{}{}
 	if r.PathFormat == path {
-		return true, params
+		return true, params, http.StatusNotFound
 	}
 
+	redirectOnMatch := false
 	pathMatches := true
 	pathComps := strings.Split(path, "/")
 	routeComps := r.Components
 	deSlashedComps := []string{}
-	if checkSlash && strings.HasSuffix(path, "/") {
+	if checkSlash && path != "/" && strings.HasSuffix(path, "/") {
 		deSlashedPath := path[:len(path)-1]
 		deSlashedComps = strings.Split(deSlashedPath, "/")
+		redirectOnMatch = true
 	}
 
 	// fmt.Printf("path comps = %v, %s\n", pathComps, path)
 	if len(pathComps) != len(routeComps) && len(deSlashedComps) != len(routeComps) {
 		// fmt.Printf(" mismatch: %d, %d\n", len(pathComps), len(routeComps))
-		return false, params
+		return false, params, http.StatusNotFound
 	}
 	checkComps := pathComps
 	if len(pathComps) != len(routeComps) {
@@ -67,14 +69,23 @@ func (r *route) MatchesPath(path string, checkSlash bool) (bool, map[string]inte
 		if comp.Type == ComponentTypeSegment {
 			// fmt.Printf(" check: %s, %s\n", comp.Value, pathComps[idx])
 			if comp.Value != checkComps[idx] {
-				return false, params
+				return false, params, http.StatusNotFound
 			}
 		} else if comp.Type == ComponentTypeWildcard {
 			// TODO - parse wildcard format option
 			params[comp.Value] = checkComps[idx]
 		}
 	}
-	return pathMatches, params
+
+	code := http.StatusOK
+	if redirectOnMatch {
+		code = http.StatusMovedPermanently
+		if r.Method == "POST" {
+			code = http.StatusTemporaryRedirect
+		}
+	}
+
+	return pathMatches, params, code
 }
 
 // Router - the router definition
@@ -217,6 +228,8 @@ func (r *Router) recoverError(w http.ResponseWriter, req *http.Request) {
 // ServeHTTP -
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
+	fmt.Println("SERVING HTTP")
+
 	useReq := req
 	usePath := useReq.URL.Path
 
@@ -248,10 +261,18 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	var doesMatch bool
 	var params map[string]interface{}
+	var matchCode int = http.StatusOK
+
 	matchedRoute := NotFoundRoute()
 	for _, route := range routes {
-		doesMatch, params = route.MatchesPath(usePath, r.ShouldRedirectTrailingSlash)
+		doesMatch, params, matchCode = route.MatchesPath(usePath, r.ShouldRedirectTrailingSlash)
 		if doesMatch {
+			if matchCode != http.StatusOK && r.ShouldRedirectTrailingSlash {
+				req.URL.Path = usePath[:len(usePath)-1]
+				fmt.Printf("Redirecting : %s\n", req.URL.String())
+				http.Redirect(w, req, req.URL.String(), matchCode)
+				return
+			}
 			if route.Method != useReq.Method {
 				r.MethodNotAllowedHandler(w, useReq)
 				return
