@@ -70,9 +70,10 @@ func (r *route) MatchesPath(path string) (bool, map[string]interface{}) {
 
 // Router - the router definition
 type Router struct {
-	routeCache     map[string]route
-	registedRoutes map[string][]route
-	variables      map[string]interface{}
+	routeCache        map[string]route
+	methodKeyedRoutes map[string][]route
+	registeredRoutes  []route
+	variables         map[string]interface{}
 
 	// RouteFilters - the registered route filters
 	RouteFilters []Filter
@@ -100,7 +101,8 @@ type Router struct {
 func NewRouter() Router {
 	return Router{
 		routeCache:                  make(map[string]route),
-		registedRoutes:              make(map[string][]route),
+		methodKeyedRoutes:           make(map[string][]route),
+		registeredRoutes:            make([]route, 0),
 		variables:                   make(map[string]interface{}),
 		ShouldRedirectTrailingSlash: true,
 		RouteFilters:                []Filter{},
@@ -185,21 +187,43 @@ func (r *Router) Route(method string, path string, handler http.HandlerFunc) err
 
 	addRoute.Components = routeComponents
 
-	methodRoutes := r.registedRoutes[method]
+	methodRoutes := r.methodKeyedRoutes[method]
 	if methodRoutes == nil {
 		methodRoutes = make([]route, 0)
 	}
 	methodRoutes = append(methodRoutes, addRoute)
-	r.registedRoutes[strings.ToUpper(method)] = methodRoutes
+	r.methodKeyedRoutes[strings.ToUpper(method)] = methodRoutes
+	r.registeredRoutes = append(r.registeredRoutes, addRoute)
 
 	return nil
 }
 
+func (r *Router) recoverError(w http.ResponseWriter, req *http.Request) {
+	if rcv := recover(); rcv != nil {
+		r.PanicHandler(w, req)
+	}
+}
+
 // ServeHTTP -
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if r.PanicHandler != nil {
+		defer r.recoverError(w, req)
+	}
+	if r.Context != nil {
+		defer r.Context.Clear(req)
+	}
 
 	method := strings.ToUpper(req.Method)
-	routes := r.registedRoutes[method]
+	var routes []route
+
+	// if the method not allowed handler IS set, we should check ALL routes
+	// if the handler is NOT set, we can just limit it to the routes for this
+	// particular method to make things faster
+	if r.MethodNotAllowedHandler != nil {
+		routes = r.registeredRoutes
+	} else {
+		routes = r.methodKeyedRoutes[method]
+	}
 
 	var doesMatch bool
 	var params map[string]interface{}
@@ -207,6 +231,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	for _, route := range routes {
 		doesMatch, params = route.MatchesPath(req.URL.Path)
 		if doesMatch {
+			if route.Method != req.Method {
+				r.MethodNotAllowedHandler(w, req)
+				return
+			}
 			matchedRoute = route
 			break
 		}
@@ -218,17 +246,13 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if r.Context != nil {
-		r.Context.Put("matched_route", matchedRoute)
+		r.Context.Put(req, "matched_route", matchedRoute)
 		for k, v := range params {
-			r.Context.Put(stripTokenDelims(k), v)
+			r.Context.Put(req, stripTokenDelims(k), v)
 		}
 	}
 
 	matchedRoute.Handler(w, req)
-
-	if r.Context != nil {
-		r.Context.Clear()
-	}
 
 	// fmt.Printf("path = %s", req.URL.Path)
 	// fmt.Printf("\n")
@@ -252,7 +276,7 @@ func (r *Router) substituteVariables(rte route, variables []Match) string {
 
 // PrintRoutes - prints debugging information about all the registered routes
 func (r *Router) PrintRoutes() {
-	for k, routes := range r.registedRoutes {
+	for k, routes := range r.methodKeyedRoutes {
 		fmt.Printf("Method: %s\n", k)
 		for _, match := range routes {
 			fmt.Printf("  - %s\n", match.PathFormat)
