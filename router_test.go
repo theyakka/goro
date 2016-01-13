@@ -24,7 +24,7 @@ func (m *mockResponseWriter) WriteString(s string) (n int, err error) {
 
 func (m *mockResponseWriter) WriteHeader(int) {}
 
-func testHandler(w http.ResponseWriter, r *http.Request) {
+func testHandler(w http.ResponseWriter, r *http.Request) (int, error) {
 	fmt.Println("MATCHED HANDLER FOR PATH")
 	matchedRoute := context.Get(r, "matched_route")
 	if matchedRoute != nil {
@@ -32,8 +32,17 @@ func testHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if context != nil {
 		fmt.Printf("  - ID: %v\n", context.Get(r, "id"))
+		fmt.Printf("  - some_val: %s\n", context.GetString(r, "some_val"))
 	}
 	fmt.Printf("  - Path: %s\n", r.URL.Path)
+
+	return http.StatusOK, nil
+}
+
+func doFirstHandler(w http.ResponseWriter, r *http.Request) (int, error) {
+	fmt.Println("DO THIS FIRST")
+	context.Put(r, "some_val", "donkey")
+	return http.StatusOK, nil
 }
 
 func notFoundHandler(w http.ResponseWriter, r *http.Request) {
@@ -58,12 +67,14 @@ func TestRouter(t *testing.T) {
 
 	fmt.Printf("\n")
 
+	chainer := NewChainer(doFirstHandler)
+
 	context = NewContext()
 	router := NewRouter()
 	router.Context = context
-	router.NotFoundHandler = notFoundHandler
-	router.MethodNotAllowedHandler = notAllowedHandler
-	router.PanicHandler = panicHandler
+	router.NotFoundHandler = http.HandlerFunc(notFoundHandler)
+	router.MethodNotAllowedHandler = http.HandlerFunc(notAllowedHandler)
+	router.PanicHandler = http.HandlerFunc(panicHandler)
 	router.ShouldRedirectTrailingSlash = true
 	router.AddStringVar("$id_format", "{id}")
 	router.AddStringVar("$operation", "this_op")
@@ -80,7 +91,7 @@ func TestRouter(t *testing.T) {
 	}
 
 	for _, path := range paths {
-		router.GET(path, testHandler)
+		router.GET(path, chainer.Then(testHandler))
 	}
 
 	router.PrintRoutes()

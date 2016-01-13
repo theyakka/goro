@@ -26,7 +26,7 @@ type route struct {
 	PathFormat   string
 	HasWildcards bool
 	Components   []routeComponent
-	Handler      http.HandlerFunc
+	Handler      http.Handler
 }
 
 func NotFoundRoute() route {
@@ -107,15 +107,15 @@ type Router struct {
 	ShouldRedirectTrailingSlash bool
 
 	// NotFoundHandler - route / resource not found handler
-	NotFoundHandler http.HandlerFunc
+	NotFoundHandler http.Handler
 
 	// MethodNotAllowedHandler - if defined, will be hit wen requesting a defined route
 	// via a non-defined http method (e.g.: requesting via POST when only GET is defined).
 	// if not defined, we will fallback to the NotFoundHandler
-	MethodNotAllowedHandler http.HandlerFunc
+	MethodNotAllowedHandler http.Handler
 
 	// PanicHandler - handler for when things gets real
-	PanicHandler http.HandlerFunc
+	PanicHandler http.Handler
 }
 
 func NewRouter() *Router {
@@ -142,31 +142,31 @@ func (r *Router) AddStringVar(variable string, value string) {
 
 // route registration
 // DELETE - Convenience func for a call using the http DELETE method
-func (r *Router) DELETE(path string, handler http.HandlerFunc) {
+func (r *Router) DELETE(path string, handler http.Handler) {
 	r.Route("DELETE", path, handler)
 }
 
 // GET - Convenience func for a call using the http GET method
-func (r *Router) GET(path string, handler http.HandlerFunc) {
+func (r *Router) GET(path string, handler http.Handler) {
 	r.Route("GET", path, handler)
 }
 
 // PATCH - Convenience func for a call using the http PATCH method
-func (r *Router) PATCH(path string, handler http.HandlerFunc) {
+func (r *Router) PATCH(path string, handler http.Handler) {
 	r.Route("PATCH", path, handler)
 }
 
 // POST - Convenience func for a call using the http POST method
-func (r *Router) POST(path string, handler http.HandlerFunc) {
+func (r *Router) POST(path string, handler http.Handler) {
 	r.Route("POST", path, handler)
 }
 
 // PUT - Convenience func for a call using the http PUT method
-func (r *Router) PUT(path string, handler http.HandlerFunc) {
+func (r *Router) PUT(path string, handler http.Handler) {
 	r.Route("PUT", path, handler)
 }
 
-func (r *Router) Route(method string, path string, handler http.HandlerFunc) error {
+func (r *Router) Route(method string, path string, handler http.Handler) error {
 	if !strings.HasPrefix(path, "/") {
 		// missing slash at the start, we aaaaare out
 		return errors.New("Path is missing leading slash ('/')")
@@ -221,7 +221,7 @@ func (r *Router) Route(method string, path string, handler http.HandlerFunc) err
 // recoverError - recover from any errors and call the panic handler
 func (r *Router) recoverError(w http.ResponseWriter, req *http.Request) {
 	if rcv := recover(); rcv != nil {
-		r.PanicHandler(w, req)
+		r.PanicHandler.ServeHTTP(w, req)
 	}
 }
 
@@ -272,7 +272,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 			if route.Method != useReq.Method {
-				r.MethodNotAllowedHandler(w, useReq)
+				r.MethodNotAllowedHandler.ServeHTTP(w, useReq)
 				return
 			}
 			matchedRoute = route
@@ -282,7 +282,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	if matchedRoute.PathFormat == "" {
 		if r.NotFoundHandler != nil {
-			r.NotFoundHandler(w, useReq)
+			r.NotFoundHandler.ServeHTTP(w, useReq)
 			return
 		} else {
 			http.NotFound(w, useReq)
@@ -298,7 +298,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// fmt.Printf("mr=%v, r=%v", matchedRoute, useReq)
-	matchedRoute.Handler(w, useReq)
+	matchedRoute.Handler.ServeHTTP(w, useReq)
 
 	// fmt.Printf("path = %s", usePath)
 	// fmt.Printf("\n")
