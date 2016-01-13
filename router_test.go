@@ -85,7 +85,7 @@ func TestRouter(t *testing.T) {
 
 	router.PrintRoutes()
 
-	checkPath := "/users/1234/"
+	checkPath := "/users/1234"
 	w := new(mockResponseWriter)
 	req, _ := http.NewRequest("GET", checkPath, nil)
 	router.ServeHTTP(w, req)

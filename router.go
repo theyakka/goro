@@ -41,7 +41,7 @@ func (r *route) MatchesPath(path string, checkSlash bool) (bool, map[string]inte
 	// is exact match?
 	params := map[string]interface{}{}
 	if r.PathFormat == path {
-		return true, params, http.StatusNotFound
+		return true, params, http.StatusOK
 	}
 
 	redirectOnMatch := false
@@ -80,7 +80,7 @@ func (r *route) MatchesPath(path string, checkSlash bool) (bool, map[string]inte
 	code := http.StatusOK
 	if redirectOnMatch {
 		code = http.StatusMovedPermanently
-		if r.Method == "POST" {
+		if r.Method != "GET" {
 			code = http.StatusTemporaryRedirect
 		}
 	}
@@ -118,8 +118,8 @@ type Router struct {
 	PanicHandler http.HandlerFunc
 }
 
-func NewRouter() Router {
-	return Router{
+func NewRouter() *Router {
+	return &Router{
 		routeCache:                  make(map[string]route),
 		methodKeyedRoutes:           make(map[string][]route),
 		registeredRoutes:            make([]route, 0),
@@ -228,8 +228,6 @@ func (r *Router) recoverError(w http.ResponseWriter, req *http.Request) {
 // ServeHTTP -
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
-	fmt.Println("SERVING HTTP")
-
 	useReq := req
 	usePath := useReq.URL.Path
 
@@ -267,9 +265,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	for _, route := range routes {
 		doesMatch, params, matchCode = route.MatchesPath(usePath, r.ShouldRedirectTrailingSlash)
 		if doesMatch {
-			if matchCode != http.StatusOK && r.ShouldRedirectTrailingSlash {
+			if matchCode == http.StatusMovedPermanently || matchCode == http.StatusTemporaryRedirect &&
+				r.ShouldRedirectTrailingSlash {
 				req.URL.Path = usePath[:len(usePath)-1]
-				fmt.Printf("Redirecting : %s\n", req.URL.String())
 				http.Redirect(w, req, req.URL.String(), matchCode)
 				return
 			}
@@ -282,9 +280,14 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if r.NotFoundHandler != nil && matchedRoute.PathFormat == "" {
-		r.NotFoundHandler(w, useReq)
-		return
+	if matchedRoute.PathFormat == "" {
+		if r.NotFoundHandler != nil {
+			r.NotFoundHandler(w, useReq)
+			return
+		} else {
+			http.NotFound(w, useReq)
+			return
+		}
 	}
 
 	if r.Context != nil {
@@ -294,6 +297,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	// fmt.Printf("mr=%v, r=%v", matchedRoute, useReq)
 	matchedRoute.Handler(w, useReq)
 
 	// fmt.Printf("path = %s", usePath)

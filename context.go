@@ -8,6 +8,7 @@ import (
 type ContextInterface interface {
 	Get(req *http.Request, key string) interface{}
 	Put(req *http.Request, key string, value interface{})
+	ClearKey(req *http.Request, key string)
 	Clear(req *http.Request)
 	ClearAll()
 }
@@ -42,6 +43,14 @@ func (c *Context) Get(req *http.Request, key string) interface{} {
 	}
 	c.mutex.RUnlock()
 	return nil
+}
+
+func (c *Context) GetString(req *http.Request, key string) string {
+	val := c.Get(req, key)
+	if val != nil {
+		return val.(string)
+	}
+	return ""
 }
 
 func (c *Context) ClearKey(req *http.Request, key string) {
