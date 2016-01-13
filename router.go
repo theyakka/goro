@@ -142,27 +142,27 @@ func (r *Router) AddStringVar(variable string, value string) {
 
 // route registration
 // DELETE - Convenience func for a call using the http DELETE method
-func (r *Router) DELETE(path string, handler http.Handler) {
+func (r *Router) DELETE(path string, handler http.HandlerFunc) {
 	r.Route("DELETE", path, handler)
 }
 
 // GET - Convenience func for a call using the http GET method
-func (r *Router) GET(path string, handler http.Handler) {
+func (r *Router) GET(path string, handler http.HandlerFunc) {
 	r.Route("GET", path, handler)
 }
 
 // PATCH - Convenience func for a call using the http PATCH method
-func (r *Router) PATCH(path string, handler http.Handler) {
+func (r *Router) PATCH(path string, handler http.HandlerFunc) {
 	r.Route("PATCH", path, handler)
 }
 
 // POST - Convenience func for a call using the http POST method
-func (r *Router) POST(path string, handler http.Handler) {
+func (r *Router) POST(path string, handler http.HandlerFunc) {
 	r.Route("POST", path, handler)
 }
 
 // PUT - Convenience func for a call using the http PUT method
-func (r *Router) PUT(path string, handler http.Handler) {
+func (r *Router) PUT(path string, handler http.HandlerFunc) {
 	r.Route("PUT", path, handler)
 }
 

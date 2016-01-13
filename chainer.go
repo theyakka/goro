@@ -16,14 +16,14 @@ func NewChainer(handlers ...ChainedHandler) Chainer {
 	return chainer
 }
 
-func (c Chainer) Then(handlers ...ChainedHandler) http.Handler {
+func (c Chainer) Then(handlers ...ChainedHandler) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c.handlers = append(c.handlers, handlers...)
 		c.executeChain(w, r)
 	})
 }
 
-func (c Chainer) ThenFuncs(handlerFuncs ...http.HandlerFunc) http.Handler {
+func (c Chainer) ThenFuncs(handlerFuncs ...http.HandlerFunc) http.HandlerFunc {
 	wrappedHandlers := []ChainedHandler{}
 	for _, handlerFunc := range handlerFuncs {
 		wrappedHandlers = append(wrappedHandlers, WrapWithChainedHandlerFunc(handlerFunc))
