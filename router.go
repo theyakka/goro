@@ -100,16 +100,19 @@ type Router struct {
 	registeredRoutes  []route
 	variables         map[string]interface{}
 
+	// RedirectTrailingSlash - should we redirect a requested path with a trailing
+	// slash to a defined route without the slash (if one exists)? Will use code 301
+	// for GET and 307 otherwise
+	ShouldRedirectTrailingSlash bool
+
+	// ShouldCacheMatchedRoutes - should we cache a route after it has been matched?
+	ShouldCacheMatchedRoutes bool
+
 	// RouteFilters - the registered route filters
 	RouteFilters []Filter
 
 	// Context - used to store context during the router lifecycle
 	Context ContextInterface
-
-	// RedirectTrailingSlash - should we redirect a requested path with a trailing
-	// slash to a defined route without the slash (if one exists)? Will use code 301
-	// for GET and 307 otherwise
-	ShouldRedirectTrailingSlash bool
 
 	// NotFoundHandler - route / resource not found handler
 	NotFoundHandler http.Handler
@@ -130,6 +133,7 @@ func NewRouter() *Router {
 		registeredRoutes:            make([]route, 0),
 		variables:                   make(map[string]interface{}),
 		ShouldRedirectTrailingSlash: true,
+		ShouldCacheMatchedRoutes:    false,
 		RouteFilters:                []Filter{},
 	}
 }
@@ -243,15 +247,18 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	cacheKey := fmt.Sprintf("%s:%s", req.Method, usePath)
-	if cachedRoute := r.routeCache[cacheKey]; cachedRoute.Handler != nil {
-		if r.Context != nil {
-			for k, v := range cachedRoute.Params {
-				r.Context.Put(useReq, stripTokenDelims(k), v)
+	var cacheKey string
+	if r.ShouldCacheMatchedRoutes {
+		cacheKey = fmt.Sprintf("%s:%s", req.Method, usePath)
+		if cachedRoute := r.routeCache[cacheKey]; cachedRoute.Handler != nil {
+			if r.Context != nil {
+				for k, v := range cachedRoute.Params {
+					r.Context.Put(useReq, stripTokenDelims(k), v)
+				}
 			}
+			cachedRoute.Handler.ServeHTTP(w, useReq)
+			return
 		}
-		cachedRoute.Handler.ServeHTTP(w, useReq)
-		return
 	}
 
 	if r.PanicHandler != nil {
@@ -314,10 +321,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	matchedRoute.Handler.ServeHTTP(w, useReq)
 
-	// cache the route
-	r.routeCache[cacheKey] = cacheEntry{
-		Params:  params,
-		Handler: matchedRoute.Handler,
+	if r.ShouldCacheMatchedRoutes {
+		// cache the route
+		r.routeCache[cacheKey] = cacheEntry{
+			Params:  params,
+			Handler: matchedRoute.Handler,
+		}
 	}
 }
 
