@@ -20,6 +20,11 @@ type routeComponent struct {
 	Wildcards []Match
 }
 
+type cacheEntry struct {
+	Params  map[string]interface{}
+	Handler http.Handler
+}
+
 // route - representation of a route
 type route struct {
 	Method       string
@@ -90,7 +95,7 @@ func (r *route) MatchesPath(path string, checkSlash bool) (bool, map[string]inte
 
 // Router - the router definition
 type Router struct {
-	routeCache        map[string]route
+	routeCache        map[string]cacheEntry
 	methodKeyedRoutes map[string][]route
 	registeredRoutes  []route
 	variables         map[string]interface{}
@@ -120,7 +125,7 @@ type Router struct {
 
 func NewRouter() *Router {
 	return &Router{
-		routeCache:                  make(map[string]route),
+		routeCache:                  make(map[string]cacheEntry),
 		methodKeyedRoutes:           make(map[string][]route),
 		registeredRoutes:            make([]route, 0),
 		variables:                   make(map[string]interface{}),
@@ -238,6 +243,17 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	cacheKey := fmt.Sprintf("%s:%s", req.Method, usePath)
+	if cachedRoute := r.routeCache[cacheKey]; cachedRoute.Handler != nil {
+		if r.Context != nil {
+			for k, v := range cachedRoute.Params {
+				r.Context.Put(useReq, stripTokenDelims(k), v)
+			}
+		}
+		cachedRoute.Handler.ServeHTTP(w, useReq)
+		return
+	}
+
 	if r.PanicHandler != nil {
 		defer r.recoverError(w, useReq)
 	}
@@ -291,18 +307,18 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if r.Context != nil {
-		r.Context.Put(useReq, "matched_route", matchedRoute)
 		for k, v := range params {
 			r.Context.Put(useReq, stripTokenDelims(k), v)
 		}
 	}
 
-	// fmt.Printf("mr=%v, r=%v", matchedRoute, useReq)
 	matchedRoute.Handler.ServeHTTP(w, useReq)
 
-	// fmt.Printf("path = %s", usePath)
-	// fmt.Printf("\n")
-	// fmt.Printf("Ya gotta serve somebody\n")
+	// cache the route
+	r.routeCache[cacheKey] = cacheEntry{
+		Params:  params,
+		Handler: matchedRoute.Handler,
+	}
 }
 
 // substituteVariables - swap any variable parts in the path format for their

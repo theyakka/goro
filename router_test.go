@@ -101,5 +101,11 @@ func TestRouter(t *testing.T) {
 	req, _ := http.NewRequest("GET", checkPath, nil)
 	router.ServeHTTP(w, req)
 
+	req2, _ := http.NewRequest("GET", checkPath, nil)
+	router.ServeHTTP(w, req2)
+
+	req3, _ := http.NewRequest("GET", checkPath, nil)
+	router.ServeHTTP(w, req3)
+
 	fmt.Printf("\n")
 }
