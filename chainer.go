@@ -27,6 +27,13 @@ func (c Chainer) Then(handlers ...ChainedHandler) http.HandlerFunc {
 	})
 }
 
+func (c Chainer) ThenChain(handlers ...ChainedHandler) ChainedHandler {
+	return func(w http.ResponseWriter, r *http.Request) (int, error) {
+		execHandlers := append(c.handlers, handlers...)
+		return c.executeChain(execHandlers, w, r)
+	}
+}
+
 func (c Chainer) ThenFuncs(handlerFuncs ...http.HandlerFunc) http.HandlerFunc {
 	wrappedHandlers := []ChainedHandler{}
 	for _, handlerFunc := range handlerFuncs {
@@ -35,13 +42,14 @@ func (c Chainer) ThenFuncs(handlerFuncs ...http.HandlerFunc) http.HandlerFunc {
 	return c.Then(wrappedHandlers...)
 }
 
-func (c Chainer) executeChain(handlers []ChainedHandler, w http.ResponseWriter, r *http.Request) {
+func (c Chainer) executeChain(handlers []ChainedHandler, w http.ResponseWriter, r *http.Request) (int, error) {
 	for _, handler := range handlers {
-		_, err := handler(w, r)
+		status, err := handler(w, r)
 		if err != nil {
-			break
+			return status, err
 		}
 	}
+	return http.StatusOK, nil
 }
 
 // WrapWithChainedHandler - allows a regular handler function to be wrapped if the
