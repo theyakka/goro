@@ -9,5 +9,5 @@ import (
 type Filter interface {
 	// ExecuteFilter allows for rewriting/modification of the original request and/or
 	// resulting path
-	ExecuteFilter(*http.Request, *string)
+	ExecuteFilter(*http.Request, *string, ContextInterface)
 }

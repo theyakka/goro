@@ -234,7 +234,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// execute the pre-process filters before we use the request / path
 	if len(r.RouteFilters) > 0 {
 		for _, filter := range r.RouteFilters {
-			filter.ExecuteFilter(useReq, &usePath)
+			filter.ExecuteFilter(useReq, &usePath, r.Context)
 		}
 	}
 
