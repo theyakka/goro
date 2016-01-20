@@ -284,6 +284,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var params map[string]interface{}
 	var matchCode int = http.StatusOK
 
+	nonMethodMatched := false
 	matchedRoute := NotFoundRoute()
 	for _, route := range routes {
 		doesMatch, params, matchCode = route.MatchesPath(usePath, r.ShouldRedirectTrailingSlash)
@@ -294,13 +295,18 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				http.Redirect(w, req, req.URL.String(), matchCode)
 				return
 			}
-			if route.Method != useReq.Method {
-				r.MethodNotAllowedHandler.ServeHTTP(w, useReq)
-				return
+			nonMethodMatched = (route.Method != useReq.Method)
+			if !nonMethodMatched {
+				nonMethodMatched = false
+				matchedRoute = route
+				break
 			}
-			matchedRoute = route
-			break
 		}
+	}
+
+	if nonMethodMatched {
+		r.MethodNotAllowedHandler.ServeHTTP(w, useReq)
+		return
 	}
 
 	if matchedRoute.PathFormat == "" {
