@@ -23,6 +23,7 @@ type routeComponent struct {
 type cacheEntry struct {
 	Params  map[string]interface{}
 	Handler http.Handler
+	Route   route
 }
 
 // route - representation of a route
@@ -133,7 +134,7 @@ func NewRouter() *Router {
 		registeredRoutes:            make([]route, 0),
 		variables:                   make(map[string]interface{}),
 		ShouldRedirectTrailingSlash: true,
-		ShouldCacheMatchedRoutes:    false,
+		ShouldCacheMatchedRoutes:    true,
 		RouteFilters:                []Filter{},
 	}
 }
@@ -240,6 +241,13 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	useReq := req
 	usePath := useReq.URL.Path
 
+	if r.PanicHandler != nil {
+		defer r.recoverError(w, useReq)
+	}
+	if r.Context != nil {
+		defer r.Context.Clear(useReq)
+	}
+
 	// execute the pre-process filters before we use the request / path
 	if len(r.RouteFilters) > 0 {
 		for _, filter := range r.RouteFilters {
@@ -252,6 +260,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		cacheKey = fmt.Sprintf("%s:%s", req.Method, usePath)
 		if cachedRoute := r.routeCache[cacheKey]; cachedRoute.Handler != nil {
 			if r.Context != nil {
+				r.Context.Put(useReq, ContextKeyRoutePathFormat, cachedRoute.Route.PathFormat)
+				r.Context.Put(useReq, ContextKeyMatchedRoute, cachedRoute)
 				for k, v := range cachedRoute.Params {
 					r.Context.Put(useReq, stripTokenDelims(k), v)
 				}
@@ -259,13 +269,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			cachedRoute.Handler.ServeHTTP(w, useReq)
 			return
 		}
-	}
-
-	if r.PanicHandler != nil {
-		defer r.recoverError(w, useReq)
-	}
-	if r.Context != nil {
-		defer r.Context.Clear(useReq)
 	}
 
 	method := strings.ToUpper(useReq.Method)
@@ -320,6 +323,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if r.Context != nil {
+		r.Context.Put(useReq, ContextKeyRoutePathFormat, matchedRoute.PathFormat)
+		r.Context.Put(useReq, ContextKeyMatchedRoute, matchedRoute)
 		for k, v := range params {
 			r.Context.Put(useReq, stripTokenDelims(k), v)
 		}
@@ -332,6 +337,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		r.routeCache[cacheKey] = cacheEntry{
 			Params:  params,
 			Handler: matchedRoute.Handler,
+			Route:   matchedRoute,
 		}
 	}
 }
