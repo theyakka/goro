@@ -14,6 +14,7 @@
 _obj
 _test
 /bin
+/src
 
 # vendor stuff
 /src/**/vendor/**

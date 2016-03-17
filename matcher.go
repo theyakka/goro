@@ -4,6 +4,20 @@ import (
 	"strings"
 )
 
+type routeMatcher struct {
+	methodKeyedRoutes map[string][]Route
+	registeredRoutes  []Route
+	variables         map[string]interface{}
+}
+
+func NewRouteMatcher() *routeMatcher {
+	return &routeMatcher{
+		methodKeyedRoutes: make(map[string][]Route),
+		registeredRoutes:  make([]Route, 0),
+		variables:         make(map[string]interface{}),
+	}
+}
+
 type StringRange struct {
 	Start  int
 	Length int
@@ -42,7 +56,7 @@ func NewMatcher(stringValue string, startDelim string, endDelim string) *Matcher
 }
 
 // NextMatch - find the next string match, if no additional match is found,
-// 			   returns a match with .Range == StringRangeNotFound()
+// 			   		 returns a match with .Range == StringRangeNotFound()
 func (m *Matcher) NextMatch() Match {
 	// out of bounds .. we are done
 	if m.startIndex > len(m.stringValue)-1 {
@@ -69,7 +83,7 @@ func (m *Matcher) NextMatch() Match {
 				Type:          matchType,
 				OriginalValue: m.stringValue,
 				Value:         val,
-				Range:         NewStringRange(rangeStart, nextIndex-startIdx),
+				Range:         newStringRange(rangeStart, nextIndex-startIdx),
 			}
 			return match
 		}
@@ -82,7 +96,7 @@ func NotFoundMatch() Match {
 		Type:          "notfound",
 		Value:         "",
 		OriginalValue: "",
-		Range:         NotFoundStringRange(),
+		Range:         notFoundStringRange(),
 	}
 }
 
@@ -90,11 +104,11 @@ func NotFoundMatch() Match {
 // --
 
 // NewStringRange - helper to generate new string range
-func NewStringRange(start int, length int) StringRange {
+func newStringRange(start int, length int) StringRange {
 	return StringRange{Start: start, Length: length}
 }
 
 // StringRangeNotFound - not found value
-func NotFoundStringRange() StringRange {
+func notFoundStringRange() StringRange {
 	return StringRange{Start: -1, Length: 0}
 }

@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-type ContextInterface interface {
+type IContext interface {
 	Get(req *http.Request, key string) interface{}
 	Put(req *http.Request, key string, value interface{})
 	ClearKey(req *http.Request, key string)

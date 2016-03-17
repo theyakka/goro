@@ -15,7 +15,7 @@ type DomainMap struct {
 	NotFoundHandler http.HandlerFunc
 }
 
-// New - creates a new domain map
+// NewDomainMap - creates a new domain map
 func NewDomainMap() *DomainMap {
 	return &DomainMap{
 		registeredPatterns: make(map[string]*Router),
@@ -28,6 +28,7 @@ func (domainMap *DomainMap) InvalidateMatchedHosts() {
 	domainMap.matchedHosts = make(map[string]*Router)
 }
 
+// RegisterRouter - Register a router for a domain pattern (regex)
 func (domainMap *DomainMap) RegisterRouter(pattern string, router *Router) {
 	domainMap.orderedPatterns = append(domainMap.orderedPatterns, pattern)
 	domainMap.registeredPatterns[pattern] = router
