@@ -1,3 +1,13 @@
+// cache.go
+// Goro
+//
+// Created by Posse in NYC
+// http://goposse.com
+//
+// Copyright (c) 2016 Posse Productions LLC.
+// All rights reserved.
+// See the LICENSE file for licensing details and requirements.
+
 package goro
 
 import (
@@ -20,6 +30,12 @@ func NewRouteCache() *RouteCache {
 	return &RouteCache{
 		Entries: make(map[string]cacheEntry),
 	}
+}
+
+// Put - add a route into the route cache
+func (rc *RouteCache) PutRoute(path string, route Route) {
+	entry := cacheEntry{}
+	rc.Entries[path] = entry
 }
 
 // Put - add an item to the route cache

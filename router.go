@@ -1,3 +1,13 @@
+// router.go
+// Goro
+//
+// Created by Posse in NYC
+// http://goposse.com
+//
+// Copyright (c) 2016 Posse Productions LLC.
+// All rights reserved.
+// See the LICENSE file for licensing details and requirements.
+
 package goro
 
 import (
@@ -19,11 +29,10 @@ type Router struct {
 	// variables - unwrapped (clean) variables that have been defined
 	variables map[string]string
 
-	// registeredRoutes - all routes registered with the router
-	registeredRoutes []Route
-
-	// registeredRoutes - all routes registered with the router
+	// methodKeyedRoutes - all routes registered with the router
 	methodKeyedRoutes map[string][]Route
+
+	allowedPathMethods map[string][]string
 
 	// wrappedVariables - wrapped ({$varname}) versions of the variables
 	wrappedVariables map[string]string
@@ -52,6 +61,9 @@ type Router struct {
 
 	// PanicHandler - handler for when things gets real
 	PanicHandler http.Handler
+
+	// GlobalHandlers - any global HTTP method-based handlers
+	globalHandlers map[string]http.Handler
 }
 
 // NewRouter - creates a new default instance of the Router type
@@ -64,7 +76,8 @@ func NewRouter() *Router {
 		variables:                   map[string]string{},
 		wrappedVariables:            map[string]string{},
 		methodKeyedRoutes:           map[string][]Route{},
-		registeredRoutes:            []Route{},
+		globalHandlers:              map[string]http.Handler{},
+		allowedPathMethods:          map[string][]string{},
 	}
 }
 
@@ -91,6 +104,12 @@ func (r *Router) ResetVariables() {
 
 // Routing functions
 
+// AddGlobalHandler - registers a global handler for all requests made using
+// 									  the provided HTTP method
+func (r *Router) AddGlobalHandler(method string, handler http.Handler) {
+	r.globalHandlers[strings.ToUpper(method)] = handler
+}
+
 // DELETE - Convenience func for a call using the http DELETE method
 func (r *Router) DELETE(path string, handler http.HandlerFunc) {
 	r.AddRoute("DELETE", path, handler)
@@ -99,6 +118,16 @@ func (r *Router) DELETE(path string, handler http.HandlerFunc) {
 // GET - Convenience func for a call using the http GET method
 func (r *Router) GET(path string, handler http.HandlerFunc) {
 	r.AddRoute("GET", path, handler)
+}
+
+// HEAD - Convenience func for a call using the http HEAD method
+func (r *Router) HEAD(path string, handler http.HandlerFunc) {
+	r.AddRoute("HEAD", path, handler)
+}
+
+// OPTIONS - Convenience func for a call using the http OPTIONS method
+func (r *Router) OPTIONS(path string, handler http.HandlerFunc) {
+	r.AddRoute("OPTIONS", path, handler)
 }
 
 // PATCH - Convenience func for a call using the http PATCH method
@@ -147,8 +176,10 @@ func (r *Router) AddRoute(method string, path string, handler http.Handler) erro
 		pathComponents: components,
 	}
 
-	// append the route to the ordered list of routes
-	r.registeredRoutes = append(r.registeredRoutes, route)
+	// append the method to the allowed methods for this path format
+	allowedMethods := r.allowedMethodsForPath(pathToUse)
+	allowedMethods = append(allowedMethods, method)
+	r.allowedPathMethods[pathToUse] = allowedMethods
 
 	// append the route to the HTTP method keyed map of routes
 	methodRoutes := r.methodKeyedRoutes[route.Method]
@@ -157,7 +188,6 @@ func (r *Router) AddRoute(method string, path string, handler http.Handler) erro
 	}
 	methodRoutes = append(methodRoutes, route)
 	r.methodKeyedRoutes[route.Method] = methodRoutes
-
 	return nil
 }
 
@@ -200,8 +230,93 @@ func stripTokenDelimiters(value string) string {
 	return replacer.Replace(value)
 }
 
+// Route matching
+
+func (r *Router) allowedMethodsForPath(path string) []string {
+	allowedMethods := r.allowedPathMethods[path]
+	if allowedMethods == nil {
+		allowedMethods = []string{}
+	}
+	return allowedMethods
+}
+
+// findMatchingRoute - find the matching route (if registered) that
+func (r *Router) findMatchingRoute(path string, method string) (route Route, params map[string]string, matchErrCode int) {
+	// params := map[string]string{}
+	routes := r.methodKeyedRoutes[method]
+	methodHasRoutes := (len(routes) > 0)
+	if methodHasRoutes {
+		// return NotFoundRoute(), map[string]string{}, 0
+	}
+
+	// didn't match route
+	allowedMethods := r.allowedMethodsForPath(path)
+	fmt.Println(allowedMethods)
+	if len(allowedMethods) > 0 {
+		return NotFoundRoute(), map[string]string{}, http.StatusMethodNotAllowed
+	}
+	return NotFoundRoute(), map[string]string{}, http.StatusNotFound
+}
+
+// Handler / content serving functions
+
 // ServeHTTP - where the magic happens
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	useReq := req
+	usePath := useReq.URL.Path
+	if r.PanicHandler != nil {
+		// defer errors to the panic handler
+		defer r.recoverError(w, useReq)
+	}
+	if r.Context != nil {
+		// defer clearing the context until finished serving
+		defer r.Context.Clear(useReq)
+	}
+	// execute the pre-process filters before we use the request / path
+	if len(r.RouteFilters) > 0 {
+		for _, filter := range r.RouteFilters {
+			filter.ExecuteFilter(useReq, &usePath, &r.Context)
+		}
+	}
+	// check to see if there is a registered global handler for the request's
+	// HTTP method
+	if len(r.globalHandlers) > 0 {
+		globalHandler := r.globalHandlers[strings.ToUpper(req.Method)]
+		if globalHandler != nil {
+			globalHandler.ServeHTTP(w, req)
+			return
+		}
+	}
+
+	_, _, matchErr := r.findMatchingRoute(usePath, req.Method)
+	if matchErr == 0 {
+		return
+	}
+
+	// there was an error matching the route
+	if matchErr == http.StatusMethodNotAllowed {
+		if r.MethodNotAllowedHandler != nil {
+			r.MethodNotAllowedHandler.ServeHTTP(w, req)
+		} else {
+			http.Error(w, "Method not allowed", matchErr)
+		}
+	} else if matchErr == http.StatusNotFound {
+		if r.NotFoundHandler != nil {
+			r.NotFoundHandler.ServeHTTP(w, req)
+		} else {
+			http.NotFound(w, req)
+		}
+	} else {
+		http.Error(w, "Error ocurred", matchErr)
+	}
+}
+
+// recoverError - recover from any errors and call the panic handler
+func (r *Router) recoverError(w http.ResponseWriter, req *http.Request) {
+	if panic := recover(); panic != nil {
+		r.PanicHandler.ServeHTTP(w, req)
+		return
+	}
 }
 
 // Debugging functions
@@ -209,7 +324,16 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // PrintRoutes - print all registered routes
 func (r *Router) PrintRoutes() {
 	fmt.Println("REGISTERED ROUTES --")
-	for _, route := range r.registeredRoutes {
-		fmt.Printf("- [%s] %s\n", route.Method, route.PathFormat)
+	for _, routes := range r.methodKeyedRoutes {
+		for _, route := range routes {
+			fmt.Printf("%7s: %s\n", route.Method, route.PathFormat)
+		}
 	}
+	if len(r.globalHandlers) > 0 {
+		fmt.Println("\nGlobal handler(s) registered for:")
+		for method := range r.globalHandlers {
+			fmt.Printf("  %s\n", method)
+		}
+	}
+	fmt.Println()
 }

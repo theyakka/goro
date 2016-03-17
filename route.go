@@ -1,3 +1,13 @@
+// route.go
+// Goro
+//
+// Created by Posse in NYC
+// http://goposse.com
+//
+// Copyright (c) 2016 Posse Productions LLC.
+// All rights reserved.
+// See the LICENSE file for licensing details and requirements.
+
 package goro
 
 import (
@@ -30,6 +40,14 @@ type Route struct {
 	HasWildcards   bool
 	Handler        http.Handler
 	pathComponents []routeComponent
+}
+
+// NotFoundRoute - placeholder for when a route cannot be matched / found
+func NotFoundRoute() Route {
+	return Route{
+		Method:     "NOTFOUND",
+		PathFormat: "",
+	}
 }
 
 func splitRoutePathComponents(path string, wildcardMatches []Match) ([]routeComponent, error) {
