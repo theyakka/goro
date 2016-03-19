@@ -304,32 +304,35 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	route, params, matchErr := r.findMatchingRoute(usePath, req.Method, r.ShouldCacheMatchedRoutes)
-	if matchErr == 0 {
+	route, params, matchResultCode := r.findMatchingRoute(usePath, req.Method, r.ShouldCacheMatchedRoutes)
+	if matchResultCode == 0 {
 		if r.ShouldCacheMatchedRoutes {
 			cacheEntry := CacheEntry{
 				hasValue: true,
+				Route:    route,
+				Params:   params,
 			}
 			r.routeCache.Put(usePath, cacheEntry)
 		}
+		route.Handler.ServeHTTP(w, req)
 		return
 	}
 
 	// there was an error matching the route
-	if matchErr == http.StatusMethodNotAllowed {
+	if matchResultCode == http.StatusMethodNotAllowed {
 		if r.MethodNotAllowedHandler != nil {
 			r.MethodNotAllowedHandler.ServeHTTP(w, req)
 		} else {
-			http.Error(w, "Method not allowed", matchErr)
+			http.Error(w, "Method not allowed", matchResultCode)
 		}
-	} else if matchErr == http.StatusNotFound {
+	} else if matchResultCode == http.StatusNotFound {
 		if r.NotFoundHandler != nil {
 			r.NotFoundHandler.ServeHTTP(w, req)
 		} else {
 			http.NotFound(w, req)
 		}
 	} else {
-		http.Error(w, "Error ocurred", matchErr)
+		http.Error(w, "Error ocurred", matchResultCode)
 	}
 }
 

@@ -13,7 +13,6 @@ package goro
 import (
 	"fmt"
 	"hash/fnv"
-	"net/http"
 	"sync"
 )
 
@@ -42,7 +41,6 @@ type RouteCache struct {
 type CacheEntry struct {
 	hasValue bool
 	Params   map[string]interface{}
-	Handler  http.Handler
 	Route    Route
 }
 
@@ -104,8 +102,7 @@ func (rc *RouteCache) moveEntryToTop(pathHash uint32, moveIndex int) {
 // PutRoute - add a route into the route cache
 func (rc *RouteCache) PutRoute(path string, route Route) {
 	entry := CacheEntry{
-		Route:   route,
-		Handler: route.Handler,
+		Route: route,
 	}
 	rc.Put(path, entry)
 }

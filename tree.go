@@ -39,6 +39,60 @@ func NewNode(part string) *Node {
 	}
 }
 
+// Node find / search functions
+
+// nodeForPart - given a part of a path, find the first matching node
+func nodeForPart(nodes []*Node, part string) *Node {
+	for _, node := range nodes {
+		if node.part == part || node.isWildcard {
+			if node.regexp != nil {
+				if !node.regexp.MatchString(part) {
+					// if there is an assigned regular expression and it does not match
+					// then this node is invalid as a match
+					return nil
+				}
+			}
+			return node
+		}
+	}
+	return nil
+}
+
+// findNodeForPathComponents - helper function to recursively check the tree for
+//														 a node that matches the pathComponents slice
+func findNodeForPathComponents(nodes []*Node, pathComponents []string) *Node {
+	checkNodes := nodes
+	var matchedNode *Node
+	for _, componentString := range pathComponents {
+		node := nodeForPart(checkNodes, componentString)
+		if node == nil {
+			return nil
+		}
+		matchedNode = node
+		checkNodes = node.nodes
+	}
+	return matchedNode
+}
+
+// RouteForPath - find the assigned route matching the given path (if it exists)
+func (t *Tree) RouteForPath(path string) Route {
+	if path != "/" {
+		pathComponents := strings.Split(path, "/")
+		pathComponents = pathComponents[1:len(pathComponents)]
+		if len(t.nodes) > 0 {
+			foundNode := findNodeForPathComponents(t.nodes, pathComponents)
+			if foundNode != nil {
+				return foundNode.route
+			}
+		}
+	}
+	return NotFoundRoute()
+}
+
+// Node creation functions
+
+// addNodesForComponents - given an array of pathComponents, create the relevant
+// 												 tree nodes and attach the Route
 func (n *Node) addNodesForComponents(components []routeComponent, route Route) {
 	firstComponent := components[0]
 	componentValue := firstComponent.Value
@@ -54,6 +108,9 @@ func (n *Node) addNodesForComponents(components []routeComponent, route Route) {
 					regexpString := partSplit[1]
 					regexp, regerr := regexp.Compile(regexpString)
 					if regerr == nil {
+						// NOTE: only add the regular expression if it is valid. if it isn't,
+						// we will assume this is a regular wildcard. This is important to
+						// understand.
 						n.regexp = regexp
 					}
 					n.part = n.part[0 : len(n.part)-1]
@@ -69,43 +126,7 @@ func (n *Node) addNodesForComponents(components []routeComponent, route Route) {
 	}
 }
 
-func nodeForPart(nodes []*Node, part string) *Node {
-	for _, node := range nodes {
-		if node.part == part || node.isWildcard {
-			return node
-		}
-	}
-	return nil
-}
-
-func findNodeForPathComponents(nodes []*Node, pathComponents []string) *Node {
-	checkNodes := nodes
-	var matchedNode *Node
-	for _, componentString := range pathComponents {
-		node := nodeForPart(checkNodes, componentString)
-		if node == nil {
-			return nil
-		}
-		matchedNode = node
-		checkNodes = node.nodes
-	}
-	return matchedNode
-}
-
-func (t *Tree) RouteForPath(path string) Route {
-	if path != "/" {
-		pathComponents := strings.Split(path, "/")
-		pathComponents = pathComponents[1:len(pathComponents)]
-		if len(t.nodes) > 0 {
-			foundNode := findNodeForPathComponents(t.nodes, pathComponents)
-			if foundNode != nil {
-				return foundNode.route
-			}
-		}
-	}
-	return NotFoundRoute()
-}
-
+// AddRoute - add the route to the tree for the given path
 func (t *Tree) AddRoute(path string, route Route) {
 	isSingleComponent := (len(route.pathComponents) == 1)
 	firstComponent := route.pathComponents[0]
