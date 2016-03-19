@@ -30,7 +30,7 @@ type Router struct {
 	variables map[string]string
 
 	// methodKeyedRoutes - all routes registered with the router
-	methodKeyedRoutes map[string][]Route
+	methodKeyedRoutes map[string]*Tree
 
 	allowedPathMethods map[string][]string
 
@@ -75,7 +75,7 @@ func NewRouter() *Router {
 		RouteFilters:                []Filter{},
 		variables:                   map[string]string{},
 		wrappedVariables:            map[string]string{},
-		methodKeyedRoutes:           map[string][]Route{},
+		methodKeyedRoutes:           map[string]*Tree{},
 		globalHandlers:              map[string]http.Handler{},
 		allowedPathMethods:          map[string][]string{},
 	}
@@ -184,9 +184,11 @@ func (r *Router) AddRoute(method string, path string, handler http.Handler) erro
 	// append the route to the HTTP method keyed map of routes
 	methodRoutes := r.methodKeyedRoutes[route.Method]
 	if methodRoutes == nil {
-		methodRoutes = make([]Route, 0)
+		methodRoutes = &Tree{
+			nodes: []*Node{},
+		}
 	}
-	methodRoutes = append(methodRoutes, route)
+	methodRoutes.AddRoute(pathToUse, route)
 	r.methodKeyedRoutes[route.Method] = methodRoutes
 	return nil
 }
@@ -241,21 +243,35 @@ func (r *Router) allowedMethodsForPath(path string) []string {
 }
 
 // findMatchingRoute - find the matching route (if registered) that
-func (r *Router) findMatchingRoute(path string, method string) (route Route, params map[string]string, matchErrCode int) {
+func (r *Router) findMatchingRoute(path string, method string, checkCache bool) (route Route, params map[string]interface{}, matchErrCode int) {
+	if checkCache {
+		cacheEntry := r.routeCache.Get(path)
+		if cacheEntry.hasValue {
+			// got a cached route
+			return cacheEntry.Route, cacheEntry.Params, 0
+		}
+	}
 	// params := map[string]string{}
-	routes := r.methodKeyedRoutes[method]
-	methodHasRoutes := (len(routes) > 0)
+	routesTree := r.methodKeyedRoutes[method]
+	methodHasRoutes := (len(routesTree.nodes) > 0)
 	if methodHasRoutes {
-		// return NotFoundRoute(), map[string]string{}, 0
+		// search for a matching route
+		tree := r.methodKeyedRoutes[strings.ToUpper(method)]
+		route := tree.RouteForPath(path)
+		didMatchRoute := (route.PathFormat != "")
+		if didMatchRoute {
+			return route, map[string]interface{}{}, 0
+		}
 	}
 
 	// didn't match route
 	allowedMethods := r.allowedMethodsForPath(path)
-	fmt.Println(allowedMethods)
 	if len(allowedMethods) > 0 {
-		return NotFoundRoute(), map[string]string{}, http.StatusMethodNotAllowed
+		// method not allowed because we couldn't match a route
+		return NotFoundRoute(), map[string]interface{}{}, http.StatusMethodNotAllowed
 	}
-	return NotFoundRoute(), map[string]string{}, http.StatusNotFound
+	// no allowed methods for the path so not found
+	return NotFoundRoute(), map[string]interface{}{}, http.StatusNotFound
 }
 
 // Handler / content serving functions
@@ -288,8 +304,14 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	_, _, matchErr := r.findMatchingRoute(usePath, req.Method)
+	route, params, matchErr := r.findMatchingRoute(usePath, req.Method, r.ShouldCacheMatchedRoutes)
 	if matchErr == 0 {
+		if r.ShouldCacheMatchedRoutes {
+			cacheEntry := CacheEntry{
+				hasValue: true,
+			}
+			r.routeCache.Put(usePath, cacheEntry)
+		}
 		return
 	}
 
@@ -321,13 +343,23 @@ func (r *Router) recoverError(w http.ResponseWriter, req *http.Request) {
 
 // Debugging functions
 
+// printNodeRoutes - recursively print out all routes
+func printNodeRoutes(nodes []*Node) {
+	for _, node := range nodes {
+		if node.route.PathFormat != "" {
+			fmt.Printf("%7s: %s\n", node.route.Method, node.route.PathFormat)
+		}
+		if len(node.nodes) > 0 {
+			printNodeRoutes(node.nodes)
+		}
+	}
+}
+
 // PrintRoutes - print all registered routes
 func (r *Router) PrintRoutes() {
 	fmt.Println("REGISTERED ROUTES --")
-	for _, routes := range r.methodKeyedRoutes {
-		for _, route := range routes {
-			fmt.Printf("%7s: %s\n", route.Method, route.PathFormat)
-		}
+	for _, routeTree := range r.methodKeyedRoutes {
+		printNodeRoutes(routeTree.nodes)
 	}
 	if len(r.globalHandlers) > 0 {
 		fmt.Println("\nGlobal handler(s) registered for:")

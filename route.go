@@ -53,12 +53,13 @@ func NotFoundRoute() Route {
 func splitRoutePathComponents(path string, wildcardMatches []Match) ([]routeComponent, error) {
 	routeComponents := []routeComponent{}
 	routeComponentStrings := strings.Split(path, "/")
+	routeComponentStrings = routeComponentStrings[1:len(routeComponentStrings)]
 	for _, component := range routeComponentStrings {
 		componentType := ComponentTypeFixed
 		if strings.HasPrefix(component, "{") {
 			componentType = ComponentTypeWildcard
 		} else if strings.HasPrefix(component, "{$") {
-			return []routeComponent{}, errors.New("Encountered a wildcard. Wildcards should have been substituted already.")
+			return []routeComponent{}, errors.New("Encountered a variable. Variables should have been substituted already.")
 		}
 		addComponent := routeComponent{
 			Type:            componentType,
