@@ -168,7 +168,7 @@ func (r *Router) AddRoute(method string, path string, handler http.Handler) erro
 		return splitErr
 	}
 
-	route := Route{
+	route := &Route{
 		Method:         strings.ToUpper(method),
 		PathFormat:     pathToUse,
 		HasWildcards:   len(wildcards) > 0,
@@ -243,7 +243,7 @@ func (r *Router) allowedMethodsForPath(path string) []string {
 }
 
 // findMatchingRoute - find the matching route (if registered) that
-func (r *Router) findMatchingRoute(path string, method string, checkCache bool) (route Route, params map[string]interface{}, wasCached bool, matchErrCode int) {
+func (r *Router) findMatchingRoute(path string, method string, checkCache bool) (route *Route, params map[string]interface{}, wasCached bool, matchErrCode int) {
 	if checkCache {
 		cacheEntry := r.routeCache.Get(path)
 		if cacheEntry.hasValue {
@@ -251,27 +251,27 @@ func (r *Router) findMatchingRoute(path string, method string, checkCache bool) 
 			return cacheEntry.Route, cacheEntry.Params, true, 0
 		}
 	}
-	// params := map[string]string{}
 	routesTree := r.methodKeyedRoutes[method]
 	methodHasRoutes := (len(routesTree.nodes) > 0)
 	if methodHasRoutes {
 		// search for a matching route
 		tree := r.methodKeyedRoutes[strings.ToUpper(method)]
-		route := tree.RouteForPath(path)
-		didMatchRoute := (route.PathFormat != "")
+		route, params := tree.RouteForPath(path)
+		didMatchRoute := (route != nil)
 		if didMatchRoute {
-			return route, map[string]interface{}{}, false, 0
+			return route, params, false, 0
 		}
 	}
 
 	// didn't match route
+	emptyParams := map[string]interface{}{}
 	allowedMethods := r.allowedMethodsForPath(path)
 	if len(allowedMethods) > 0 {
 		// method not allowed because we couldn't match a route
-		return NotFoundRoute(), map[string]interface{}{}, false, http.StatusMethodNotAllowed
+		return nil, emptyParams, false, http.StatusMethodNotAllowed
 	}
 	// no allowed methods for the path so not found
-	return NotFoundRoute(), map[string]interface{}{}, false, http.StatusNotFound
+	return nil, emptyParams, false, http.StatusNotFound
 }
 
 // Handler / content serving functions
@@ -347,7 +347,7 @@ func (r *Router) recoverError(w http.ResponseWriter, req *http.Request) {
 
 // Context functions
 
-func (r *Router) setRequestContextVariables(req *http.Request, route Route, params map[string]interface{}, wasCached bool) {
+func (r *Router) setRequestContextVariables(req *http.Request, route *Route, params map[string]interface{}, wasCached bool) {
 	if r.Context != nil {
 		r.Context.Put(req, ContextKeyRoutePathFormat, route.PathFormat)
 		r.Context.Put(req, ContextKeyMatchedRoute, route)
@@ -361,7 +361,7 @@ func (r *Router) setRequestContextVariables(req *http.Request, route Route, para
 // printNodeRoutes - recursively print out all routes
 func printNodeRoutes(nodes []*Node) {
 	for _, node := range nodes {
-		if node.route.PathFormat != "" {
+		if node.route != nil {
 			fmt.Printf("%7s: %s\n", node.route.Method, node.route.PathFormat)
 		}
 		if len(node.nodes) > 0 {
@@ -383,4 +383,28 @@ func (r *Router) PrintRoutes() {
 		}
 	}
 	fmt.Println()
+}
+
+func printNodesRecursively(nodes []*Node, level int) {
+	var levelString string
+	var i = 0
+	for i = 0; i < level; i++ {
+		levelString += "-"
+	}
+	if len(levelString) > 0 {
+		levelString += " "
+	}
+	for _, node := range nodes {
+		fmt.Printf("  %s%s\n", levelString, node.part)
+		printNodesRecursively(node.nodes, level+1)
+	}
+}
+
+// PrintTrees - print all the trees
+func (r *Router) PrintTrees() {
+	fmt.Println("REGISTERED TREES --")
+	for method, routeTree := range r.methodKeyedRoutes {
+		fmt.Println(method)
+		printNodesRecursively(routeTree.nodes, 0)
+	}
 }

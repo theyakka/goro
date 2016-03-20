@@ -90,6 +90,8 @@ func TestRouter(t *testing.T) {
 
 	router.PrintRoutes()
 
+	router.PrintTrees()
+
 	log.Fatal(http.ListenAndServe(":9900", router))
 
 }

@@ -44,8 +44,8 @@ type Route struct {
 }
 
 // NotFoundRoute - placeholder for when a route cannot be matched / found
-func NotFoundRoute() Route {
-	return Route{
+func NotFoundRoute() *Route {
+	return &Route{
 		Method:     RouteNotFoundMethod,
 		PathFormat: "",
 	}

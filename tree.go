@@ -11,7 +11,6 @@
 package goro
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 )
@@ -21,7 +20,7 @@ type Node struct {
 	part       string
 	isWildcard bool
 	regexp     *regexp.Regexp
-	route      Route
+	route      *Route
 	nodes      []*Node
 }
 
@@ -42,20 +41,28 @@ func NewNode(part string) *Node {
 
 // Node find / search functions
 
-// nodeForPart - given a part of a path, find the first matching node
-func nodeForPart(nodes []*Node, part string) *Node {
+// nodesForPart - given a part of a path, find any matching nodes
+func nodesForPart(nodes []*Node, part string) []*Node {
+	matchingNodes := []*Node{}
 	for _, node := range nodes {
-		fmt.Println("part =", node.part, ", is WC=", node.isWildcard)
 		if node.part == part || node.isWildcard {
 			if node.regexp != nil {
-				fmt.Println("check regexp")
 				if !node.regexp.MatchString(part) {
 					// if there is an assigned regular expression and it does not match
 					// then this node is invalid as a match
-					return nil
+					continue
 				}
 			}
-			fmt.Println("matches")
+			matchingNodes = append(matchingNodes, node)
+		}
+	}
+	return matchingNodes
+}
+
+// nodesForPart - given a part of a path, find a matching node (only checks exact string match)
+func nodeForPart(nodes []*Node, part string) *Node {
+	for _, node := range nodes {
+		if node.part == part {
 			return node
 		}
 	}
@@ -67,36 +74,60 @@ func nodeForPart(nodes []*Node, part string) *Node {
 func findNodeForPathComponents(nodes []*Node, pathComponents []string) *Node {
 	checkNodes := nodes
 	var matchedNode *Node
-	for _, componentString := range pathComponents {
-		node := nodeForPart(checkNodes, componentString)
-		if node != nil {
-			matchedNode = node
-			checkNodes = node.nodes
+	for idx, componentString := range pathComponents {
+		nodes := nodesForPart(checkNodes, componentString)
+		nodeCount := len(nodes)
+		if nodeCount == 1 {
+			// only 1 node matches the criteria, so we can use it now
+			matchedNode = nodes[0]
+			checkNodes = matchedNode.nodes
+		} else if nodeCount > 1 {
+			if idx < (len(pathComponents) - 1) {
+				subComponents := pathComponents[idx+1 : len(pathComponents)]
+				subCheckNodes := []*Node{}
+				for _, node := range nodes {
+					subCheckNodes = append(subCheckNodes, node.nodes...)
+				}
+				return findNodeForPathComponents(subCheckNodes, subComponents)
+			}
+			// just check matched node for first option with a route attached
+			for _, node := range nodes {
+				if node.route != nil {
+					return node
+				}
+			}
 		}
 	}
 	return matchedNode
 }
 
 // RouteForPath - find the assigned route matching the given path (if it exists)
-func (t *Tree) RouteForPath(path string) Route {
+func (t *Tree) RouteForPath(path string) (route *Route, params map[string]interface{}) {
 	if path != "/" {
 		pathComponents := strings.Split(path, "/")
 		pathComponents = pathComponents[1:len(pathComponents)]
 		if len(t.nodes) > 0 {
 			foundNode := findNodeForPathComponents(t.nodes, pathComponents)
 			if foundNode != nil {
-				return foundNode.route
+				return foundNode.route, map[string]interface{}{}
 			}
 		}
 	}
-	return NotFoundRoute()
+	return nil, map[string]interface{}{}
+}
+
+// Parameter parsing functions
+
+func parameterForNode(node *Node, part string) (paramKey string, paramValue string) {
+	strippedPart := stripTokenDelimiters(node.part)
+	return strippedPart, part
 }
 
 // Node creation functions
 
 // addNodesForComponents - given an array of pathComponents, create the relevant
 // 												 tree nodes and attach the Route
-func (n *Node) addNodesForComponents(components []routeComponent, route Route) {
+func (n *Node) addNodesForComponents(components []routeComponent, route *Route) {
 	firstComponent := components[0]
 	componentValue := firstComponent.Value
 	node := nodeForPart(n.nodes, componentValue)
@@ -122,6 +153,7 @@ func (n *Node) addNodesForComponents(components []routeComponent, route Route) {
 		}
 		n.nodes = append(n.nodes, node)
 	}
+
 	if len(components) > 1 {
 		node.addNodesForComponents(components[1:len(components)], route)
 	} else {
@@ -130,12 +162,16 @@ func (n *Node) addNodesForComponents(components []routeComponent, route Route) {
 }
 
 // AddRoute - add the route to the tree for the given path
-func (t *Tree) AddRoute(path string, route Route) {
+func (t *Tree) AddRoute(path string, route *Route) {
 	isSingleComponent := (len(route.pathComponents) == 1)
 	firstComponent := route.pathComponents[0]
-	node := nodeForPart(t.nodes, firstComponent.Value)
+	nodePart := firstComponent.Value
+	if path == "/" {
+		nodePart = path
+	}
+	node := nodeForPart(t.nodes, nodePart)
 	if node == nil {
-		node = NewNode(firstComponent.Value)
+		node = NewNode(nodePart)
 		t.nodes = append(t.nodes, node)
 	}
 	if isSingleComponent {

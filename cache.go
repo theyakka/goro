@@ -11,7 +11,6 @@
 package goro
 
 import (
-	"fmt"
 	"hash/fnv"
 	"sync"
 )
@@ -41,7 +40,7 @@ type RouteCache struct {
 type CacheEntry struct {
 	hasValue bool
 	Params   map[string]interface{}
-	Route    Route
+	Route    *Route
 }
 
 // NewRouteCache - creates a new default RouteCache
@@ -77,7 +76,6 @@ func (rc *RouteCache) Get(path string) CacheEntry {
 		}
 	}
 	if rc.ReorderOnAccess {
-		fmt.Println(len(rc.pathHashes))
 		if len(rc.pathHashes) > 1 {
 			rc.moveEntryToTop(pathHash, foundIdx)
 		}
@@ -100,7 +98,7 @@ func (rc *RouteCache) moveEntryToTop(pathHash uint32, moveIndex int) {
 }
 
 // PutRoute - add a route into the route cache
-func (rc *RouteCache) PutRoute(path string, route Route) {
+func (rc *RouteCache) PutRoute(path string, route *Route) {
 	entry := CacheEntry{
 		Route: route,
 	}
