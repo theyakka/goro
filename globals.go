@@ -36,3 +36,11 @@ const MatchTypeWildcard string = "wildcard"
 
 // MatchTypeVariable - match type representing a variable match
 const MatchTypeVariable string = "variable"
+
+// MinInt - Get the minimum integer value
+func MinInt(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}

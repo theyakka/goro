@@ -84,12 +84,13 @@ func (rc *RouteCache) Get(path string) CacheEntry {
 }
 
 func (rc *RouteCache) moveEntryToTop(pathHash uint32, moveIndex int) {
-	var allHashes []uint32
-	var allEntries []CacheEntry
+	allHashes := rc.pathHashes
+	allEntries := rc.Entries
 	entry := allEntries[moveIndex]
 	// remove entry
-	allHashes = append(allHashes[:moveIndex], allHashes[moveIndex+1:]...)
-	allEntries = append(allEntries[:moveIndex], allEntries[moveIndex+1:]...)
+	lastIndex := moveIndex + 1
+	allHashes = append(allHashes[:moveIndex], allHashes[lastIndex:]...)
+	allEntries = append(allEntries[:moveIndex], allEntries[lastIndex:]...)
 	// re-add entry
 	allHashes = append([]uint32{pathHash}, allHashes...)
 	allEntries = append([]CacheEntry{entry}, allEntries...)
