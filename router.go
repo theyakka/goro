@@ -20,8 +20,8 @@ import (
 // Router - the primary router type
 type Router struct {
 
-	// routeCache - storage for cached routes
-	routeCache *RouteCache
+	// routeCaches - storage for cached routes (keyed on method)
+	routeCaches map[string]*RouteCache
 
 	// routeMatcher - the primary route matcher instance
 	routeMatcher *routeMatcher
@@ -69,7 +69,7 @@ type Router struct {
 // NewRouter - creates a new default instance of the Router type
 func NewRouter() *Router {
 	return &Router{
-		routeCache:                  NewRouteCache(),
+		routeCaches:                 map[string]*RouteCache{},
 		ShouldRedirectTrailingSlash: true,
 		ShouldCacheMatchedRoutes:    true,
 		RouteFilters:                []Filter{},
@@ -245,10 +245,13 @@ func (r *Router) allowedMethodsForPath(path string) []string {
 // findMatchingRoute - find the matching route (if registered) that
 func (r *Router) findMatchingRoute(path string, method string, checkCache bool) (route *Route, params map[string]interface{}, wasCached bool, matchErrCode int) {
 	if checkCache {
-		cacheEntry := r.routeCache.Get(path)
-		if cacheEntry.hasValue {
-			// got a cached route
-			return cacheEntry.Route, cacheEntry.Params, true, 0
+		cache := r.routeCaches[method]
+		if cache != nil {
+			cacheEntry := cache.Get(path)
+			if cacheEntry.hasValue {
+				// got a cached route
+				return cacheEntry.Route, cacheEntry.Params, true, 0
+			}
 		}
 	}
 	routesTree := r.methodKeyedRoutes[method]
@@ -312,7 +315,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				Route:    route,
 				Params:   params,
 			}
-			r.routeCache.Put(usePath, cacheEntry)
+			cache := r.routeCaches[route.Method]
+			if cache == nil {
+				cache = NewRouteCache()
+				r.routeCaches[route.Method] = cache
+			}
+			cache.Put(usePath, cacheEntry)
 		}
 		r.setRequestContextVariables(req, route, params, wasCached)
 		route.Handler.ServeHTTP(w, req)

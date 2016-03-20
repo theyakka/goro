@@ -11,6 +11,7 @@
 package goro
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -103,14 +104,17 @@ func findNodeForPathComponents(nodes []*Node, pathComponents []string) *Node {
 
 // RouteForPath - find the assigned route matching the given path (if it exists)
 func (t *Tree) RouteForPath(path string) (route *Route, params map[string]interface{}) {
+	var pathComponents []string
 	if path != "/" {
-		pathComponents := strings.Split(path, "/")
+		pathComponents = strings.Split(path, "/")
 		pathComponents = pathComponents[1:len(pathComponents)]
-		if len(t.nodes) > 0 {
-			foundNode := findNodeForPathComponents(t.nodes, pathComponents)
-			if foundNode != nil {
-				return foundNode.route, map[string]interface{}{}
-			}
+	} else {
+		pathComponents = []string{"/"}
+	}
+	if len(t.nodes) > 0 {
+		foundNode := findNodeForPathComponents(t.nodes, pathComponents)
+		if foundNode != nil {
+			return foundNode.route, map[string]interface{}{}
 		}
 	}
 	return nil, map[string]interface{}{}
@@ -176,6 +180,7 @@ func (t *Tree) AddRoute(path string, route *Route) {
 	}
 	if isSingleComponent {
 		node.route = route
+		fmt.Println(route.Method)
 	} else {
 		slicedComponents := route.pathComponents[1:len(route.pathComponents)]
 		node.addNodesForComponents(slicedComponents, route)

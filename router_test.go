@@ -77,9 +77,13 @@ func TestRouter(t *testing.T) {
 	router.SetVariable("id-format", "{id}")
 	router.AddGlobalHandler("OPTIONS", globalHandler())
 
+	router.GET("/", func(w http.ResponseWriter, req *http.Request) {
+		fmt.Println("I AM Root")
+	})
 	router.GET("/users", func(w http.ResponseWriter, req *http.Request) {})
 	router.POST("/users/{$id-format}/action/{action}", func(w http.ResponseWriter, req *http.Request) {})
 	router.GET("/users/{turnip}/hello", func(w http.ResponseWriter, req *http.Request) {
+		fmt.Println("OH HEEEEELLLLLLOOOOOOOOO")
 	})
 	router.GET("/users/{$id-format}", func(w http.ResponseWriter, req *http.Request) {
 		fmt.Println("LOOK FOR USER with id")
