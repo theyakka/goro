@@ -18,6 +18,12 @@ const ContextKeyRoutePathFormat string = "goro.ctkRoutePathFmt"
 // ContextKeyMatchedRoute - context value key for the matched route value
 const ContextKeyMatchedRoute string = "goro.ctkMatchedRoute"
 
+// ContextKeyRouteParams - context value key for the route parameter values
+const ContextKeyRouteParams string = "goro.ctkRouteParams"
+
+// ContextKeyCallWasCached - context value key flag determined if the last call came from the cache
+const ContextKeyCallWasCached string = "goro.ctkCallWasCached"
+
 // Matcher constants
 
 // MatchTypeWildcard - match type representing a wildcard match

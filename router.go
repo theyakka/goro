@@ -243,12 +243,12 @@ func (r *Router) allowedMethodsForPath(path string) []string {
 }
 
 // findMatchingRoute - find the matching route (if registered) that
-func (r *Router) findMatchingRoute(path string, method string, checkCache bool) (route Route, params map[string]interface{}, matchErrCode int) {
+func (r *Router) findMatchingRoute(path string, method string, checkCache bool) (route Route, params map[string]interface{}, wasCached bool, matchErrCode int) {
 	if checkCache {
 		cacheEntry := r.routeCache.Get(path)
 		if cacheEntry.hasValue {
 			// got a cached route
-			return cacheEntry.Route, cacheEntry.Params, 0
+			return cacheEntry.Route, cacheEntry.Params, true, 0
 		}
 	}
 	// params := map[string]string{}
@@ -260,7 +260,7 @@ func (r *Router) findMatchingRoute(path string, method string, checkCache bool) 
 		route := tree.RouteForPath(path)
 		didMatchRoute := (route.PathFormat != "")
 		if didMatchRoute {
-			return route, map[string]interface{}{}, 0
+			return route, map[string]interface{}{}, false, 0
 		}
 	}
 
@@ -268,10 +268,10 @@ func (r *Router) findMatchingRoute(path string, method string, checkCache bool) 
 	allowedMethods := r.allowedMethodsForPath(path)
 	if len(allowedMethods) > 0 {
 		// method not allowed because we couldn't match a route
-		return NotFoundRoute(), map[string]interface{}{}, http.StatusMethodNotAllowed
+		return NotFoundRoute(), map[string]interface{}{}, false, http.StatusMethodNotAllowed
 	}
 	// no allowed methods for the path so not found
-	return NotFoundRoute(), map[string]interface{}{}, http.StatusNotFound
+	return NotFoundRoute(), map[string]interface{}{}, false, http.StatusNotFound
 }
 
 // Handler / content serving functions
@@ -304,7 +304,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	route, params, matchResultCode := r.findMatchingRoute(usePath, req.Method, r.ShouldCacheMatchedRoutes)
+	route, params, wasCached, matchResultCode := r.findMatchingRoute(usePath, req.Method, r.ShouldCacheMatchedRoutes)
 	if matchResultCode == 0 {
 		if r.ShouldCacheMatchedRoutes {
 			cacheEntry := CacheEntry{
@@ -314,6 +314,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 			r.routeCache.Put(usePath, cacheEntry)
 		}
+		r.setRequestContextVariables(req, route, params, wasCached)
 		route.Handler.ServeHTTP(w, req)
 		return
 	}
@@ -341,6 +342,17 @@ func (r *Router) recoverError(w http.ResponseWriter, req *http.Request) {
 	if panic := recover(); panic != nil {
 		r.PanicHandler.ServeHTTP(w, req)
 		return
+	}
+}
+
+// Context functions
+
+func (r *Router) setRequestContextVariables(req *http.Request, route Route, params map[string]interface{}, wasCached bool) {
+	if r.Context != nil {
+		r.Context.Put(req, ContextKeyRoutePathFormat, route.PathFormat)
+		r.Context.Put(req, ContextKeyMatchedRoute, route)
+		r.Context.Put(req, ContextKeyRouteParams, params)
+		r.Context.Put(req, ContextKeyCallWasCached, wasCached)
 	}
 }
 

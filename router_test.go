@@ -74,12 +74,16 @@ func TestRouter(t *testing.T) {
 	fmt.Println() // blank line
 
 	router := NewRouter()
-	router.SetVariable("id-format", "{id:^[a-zA-Z0-9_]*$}")
+	router.SetVariable("id-format", "{id}")
 	router.AddGlobalHandler("OPTIONS", globalHandler())
 
 	router.GET("/users", func(w http.ResponseWriter, req *http.Request) {})
 	router.POST("/users/{$id-format}/action/{action}", func(w http.ResponseWriter, req *http.Request) {})
-	router.GET("/users/{$id-format}", func(w http.ResponseWriter, req *http.Request) {})
+	router.GET("/users/{turnip}/hello", func(w http.ResponseWriter, req *http.Request) {
+	})
+	router.GET("/users/{$id-format}", func(w http.ResponseWriter, req *http.Request) {
+		fmt.Println("LOOK FOR USER with id")
+	})
 	router.GET("/test/this", func(w http.ResponseWriter, req *http.Request) {})
 	router.DELETE("/test/{$bad-var}", func(w http.ResponseWriter, req *http.Request) {})
 	router.PUT("/monkey/update", func(w http.ResponseWriter, req *http.Request) {})

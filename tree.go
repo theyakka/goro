@@ -11,6 +11,7 @@
 package goro
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -44,14 +45,17 @@ func NewNode(part string) *Node {
 // nodeForPart - given a part of a path, find the first matching node
 func nodeForPart(nodes []*Node, part string) *Node {
 	for _, node := range nodes {
+		fmt.Println("part =", node.part, ", is WC=", node.isWildcard)
 		if node.part == part || node.isWildcard {
 			if node.regexp != nil {
+				fmt.Println("check regexp")
 				if !node.regexp.MatchString(part) {
 					// if there is an assigned regular expression and it does not match
 					// then this node is invalid as a match
 					return nil
 				}
 			}
+			fmt.Println("matches")
 			return node
 		}
 	}
@@ -65,11 +69,10 @@ func findNodeForPathComponents(nodes []*Node, pathComponents []string) *Node {
 	var matchedNode *Node
 	for _, componentString := range pathComponents {
 		node := nodeForPart(checkNodes, componentString)
-		if node == nil {
-			return nil
+		if node != nil {
+			matchedNode = node
+			checkNodes = node.nodes
 		}
-		matchedNode = node
-		checkNodes = node.nodes
 	}
 	return matchedNode
 }
@@ -100,7 +103,7 @@ func (n *Node) addNodesForComponents(components []routeComponent, route Route) {
 	if node == nil {
 		node = NewNode(componentValue)
 		if strings.HasPrefix(componentValue, "{") {
-			n.isWildcard = true
+			node.isWildcard = true
 			if strings.Index(componentValue, ":") != -1 {
 				// anything after the first colon is expected to be a regular expression
 				partSplit := strings.SplitAfterN(componentValue, ":", 2)
@@ -111,9 +114,9 @@ func (n *Node) addNodesForComponents(components []routeComponent, route Route) {
 						// NOTE: only add the regular expression if it is valid. if it isn't,
 						// we will assume this is a regular wildcard. This is important to
 						// understand.
-						n.regexp = regexp
+						node.regexp = regexp
 					}
-					n.part = n.part[0 : len(n.part)-1]
+					node.part = node.part[0 : len(node.part)-1]
 				}
 			}
 		}
