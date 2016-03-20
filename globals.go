@@ -24,6 +24,11 @@ const ContextKeyRouteParams string = "goro.ctkRouteParams"
 // ContextKeyCallWasCached - context value key flag determined if the last call came from the cache
 const ContextKeyCallWasCached string = "goro.ctkCallWasCached"
 
+// Route constants
+
+// RouteNotFoundMethod - the method attached to the not found route
+const RouteNotFoundMethod string = "NOTFOUND"
+
 // Matcher constants
 
 // MatchTypeWildcard - match type representing a wildcard match

@@ -16,7 +16,8 @@ import (
 	"strings"
 )
 
-// RouteComponentType - route component type
+// RouteComponentType - route component types
+// NOTE: variables will be stripped out / replaced so we dont track them
 type RouteComponentType int
 
 const (
@@ -45,7 +46,7 @@ type Route struct {
 // NotFoundRoute - placeholder for when a route cannot be matched / found
 func NotFoundRoute() Route {
 	return Route{
-		Method:     "NOTFOUND",
+		Method:     RouteNotFoundMethod,
 		PathFormat: "",
 	}
 }
