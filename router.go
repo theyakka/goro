@@ -243,14 +243,25 @@ func (r *Router) allowedMethodsForPath(path string) []string {
 }
 
 // findMatchingRoute - find the matching route (if registered) that
-func (r *Router) findMatchingRoute(path string, method string, checkCache bool) (route *Route, params map[string]interface{}, wasCached bool, matchErrCode int) {
+func (r *Router) findMatchingRoute(path string, method string, checkCache bool) (matchedPath string, route *Route, params map[string]interface{}, wasCached bool, matchErrCode int) {
+
+	matchStatus := 0
+	matchPath := path
+	if r.ShouldRedirectTrailingSlash && strings.HasSuffix(path, "/") {
+		matchPath = path[:len(path)-1]
+		matchStatus = http.StatusMovedPermanently
+		if method != "GET" {
+			matchStatus = http.StatusTemporaryRedirect
+		}
+	}
+
 	if checkCache {
 		cache := r.routeCaches[method]
 		if cache != nil {
-			cacheEntry := cache.Get(path)
+			cacheEntry := cache.Get(matchPath)
 			if cacheEntry.hasValue {
 				// got a cached route
-				return cacheEntry.Route, cacheEntry.Params, true, 0
+				return matchPath, cacheEntry.Route, cacheEntry.Params, true, matchStatus
 			}
 		}
 	}
@@ -259,22 +270,22 @@ func (r *Router) findMatchingRoute(path string, method string, checkCache bool) 
 	if methodHasRoutes {
 		// search for a matching route
 		tree := r.methodKeyedRoutes[strings.ToUpper(method)]
-		route, params := tree.RouteForPath(path)
+		route, params := tree.RouteForPath(matchPath)
 		didMatchRoute := (route != nil)
 		if didMatchRoute {
-			return route, params, false, 0
+			return matchPath, route, params, false, matchStatus
 		}
 	}
 
 	// didn't match route
 	emptyParams := map[string]interface{}{}
-	allowedMethods := r.allowedMethodsForPath(path)
+	allowedMethods := r.allowedMethodsForPath(matchPath)
 	if len(allowedMethods) > 0 {
 		// method not allowed because we couldn't match a route
-		return nil, emptyParams, false, http.StatusMethodNotAllowed
+		return matchPath, nil, emptyParams, false, http.StatusMethodNotAllowed
 	}
-	// no allowed methods for the path so not found
-	return nil, emptyParams, false, http.StatusNotFound
+	// no allowed methods for the path so not found. keep original patch, not de-slashed.
+	return path, nil, emptyParams, false, http.StatusNotFound
 }
 
 // Handler / content serving functions
@@ -307,8 +318,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	route, params, wasCached, matchResultCode := r.findMatchingRoute(usePath, req.Method, r.ShouldCacheMatchedRoutes)
-	if matchResultCode == 0 {
+	matchedPath, route, params, wasCached, matchResultCode := r.findMatchingRoute(usePath, req.Method, r.ShouldCacheMatchedRoutes)
+	isRedirect := matchResultCode == http.StatusMovedPermanently ||
+		matchResultCode == http.StatusTemporaryRedirect
+	isNonErrorMatch := matchResultCode == 0 || isRedirect
+	if isNonErrorMatch {
 		if r.ShouldCacheMatchedRoutes {
 			cacheEntry := CacheEntry{
 				hasValue: true,
@@ -323,7 +337,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			cache.Put(usePath, cacheEntry)
 		}
 		r.setRequestContextVariables(req, route, params, wasCached)
-		route.Handler.ServeHTTP(w, req)
+		if isRedirect {
+			http.Redirect(w, req, matchedPath, matchResultCode)
+		} else {
+			route.Handler.ServeHTTP(w, req)
+		}
+
 		return
 	}
 
