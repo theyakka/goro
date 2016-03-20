@@ -151,7 +151,7 @@ func (r *Router) AddRoute(method string, path string, handler http.Handler) erro
 		// missing slash at the start, we aaaaare out
 		return errors.New("Path value is missing leading slash ('/')")
 	}
-	pathToUse := path
+	pathToUse := strings.ToLower(path) // always convert to lowercase
 	// find all wildcards and variable matches
 	wildcards, variables := findSpecialComponents(pathToUse)
 	if len(variables) > 0 {
@@ -282,7 +282,7 @@ func (r *Router) findMatchingRoute(path string, method string, checkCache bool) 
 // ServeHTTP - where the magic happens
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	useReq := req
-	usePath := useReq.URL.Path
+	usePath := strings.ToLower(useReq.URL.Path) // always compare lower
 	if r.PanicHandler != nil {
 		// defer errors to the panic handler
 		defer r.recoverError(w, useReq)
