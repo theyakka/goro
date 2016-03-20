@@ -23,6 +23,7 @@ type Node struct {
 	regexp     *regexp.Regexp
 	route      *Route
 	nodes      []*Node
+	parent     *Node
 }
 
 // Tree - storage for routes
@@ -37,6 +38,7 @@ func NewNode(part string) *Node {
 		isWildcard: false,
 		regexp:     nil,
 		nodes:      []*Node{},
+		parent:     nil,
 	}
 }
 
@@ -76,23 +78,23 @@ func findNodeForPathComponents(nodes []*Node, pathComponents []string) *Node {
 	checkNodes := nodes
 	var matchedNode *Node
 	for idx, componentString := range pathComponents {
-		nodes := nodesForPart(checkNodes, componentString)
-		nodeCount := len(nodes)
+		matchedNodes := nodesForPart(checkNodes, componentString)
+		nodeCount := len(matchedNodes)
 		if nodeCount == 1 {
 			// only 1 node matches the criteria, so we can use it now
-			matchedNode = nodes[0]
+			matchedNode = matchedNodes[0]
 			checkNodes = matchedNode.nodes
 		} else if nodeCount > 1 {
 			if idx < (len(pathComponents) - 1) {
 				subComponents := pathComponents[idx+1 : len(pathComponents)]
 				subCheckNodes := []*Node{}
-				for _, node := range nodes {
+				for _, node := range matchedNodes {
 					subCheckNodes = append(subCheckNodes, node.nodes...)
 				}
 				return findNodeForPathComponents(subCheckNodes, subComponents)
 			}
 			// just check matched node for first option with a route attached
-			for _, node := range nodes {
+			for _, node := range matchedNodes {
 				if node.route != nil {
 					return node
 				}
@@ -105,6 +107,7 @@ func findNodeForPathComponents(nodes []*Node, pathComponents []string) *Node {
 // RouteForPath - find the assigned route matching the given path (if it exists)
 func (t *Tree) RouteForPath(path string) (route *Route, params map[string]interface{}) {
 	var pathComponents []string
+	var matchedParams = map[string]interface{}{}
 	if path != "/" {
 		pathComponents = strings.Split(path, "/")
 		pathComponents = pathComponents[1:len(pathComponents)]
@@ -113,8 +116,19 @@ func (t *Tree) RouteForPath(path string) (route *Route, params map[string]interf
 	}
 	if len(t.nodes) > 0 {
 		foundNode := findNodeForPathComponents(t.nodes, pathComponents)
+		// extract the parameters
+		checkNode := foundNode
+		compIndex := len(pathComponents) - 1
+		for checkNode != nil {
+			if checkNode.isWildcard {
+				paramName := stripTokenDelimiters(checkNode.part)
+				matchedParams[paramName] = pathComponents[compIndex]
+			}
+			checkNode = checkNode.parent
+			compIndex--
+		}
 		if foundNode != nil {
-			return foundNode.route, map[string]interface{}{}
+			return foundNode.route, matchedParams
 		}
 	}
 	return nil, map[string]interface{}{}
@@ -137,6 +151,7 @@ func (n *Node) addNodesForComponents(components []routeComponent, route *Route) 
 	node := nodeForPart(n.nodes, componentValue)
 	if node == nil {
 		node = NewNode(componentValue)
+		node.parent = n
 		if strings.HasPrefix(componentValue, "{") {
 			node.isWildcard = true
 			if strings.Index(componentValue, ":") != -1 {

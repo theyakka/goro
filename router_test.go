@@ -69,11 +69,15 @@ func globalHandler() http.Handler {
 	})
 }
 
+var context *Context
+
 func TestRouter(t *testing.T) {
 
 	fmt.Println() // blank line
 
+	context = NewContext()
 	router := NewRouter()
+	router.Context = context
 	router.SetVariable("id-format", "{id}")
 	router.AddGlobalHandler("OPTIONS", globalHandler())
 
@@ -86,9 +90,13 @@ func TestRouter(t *testing.T) {
 		fmt.Println("OH HEEEEELLLLLLOOOOOOOOO")
 	})
 	router.GET("/users/{$id-format}", func(w http.ResponseWriter, req *http.Request) {
-		fmt.Println("LOOK FOR USER with id")
+		params := ParamsMap(context, req)
+		fmt.Println("LOOK FOR USER with id =", params["id"])
 	})
-	router.GET("/test/this", func(w http.ResponseWriter, req *http.Request) {})
+	router.GET("/test/this", func(w http.ResponseWriter, req *http.Request) {
+		params := ParamsMap(context, req)
+		fmt.Println("test this. params =", params)
+	})
 	router.DELETE("/test/{$bad-var}", func(w http.ResponseWriter, req *http.Request) {})
 	router.PUT("/monkey/update", func(w http.ResponseWriter, req *http.Request) {})
 
