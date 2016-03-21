@@ -195,7 +195,6 @@ func (t *Tree) AddRoute(path string, route *Route) {
 	}
 	if isSingleComponent {
 		node.route = route
-		fmt.Println(route.Method)
 	} else {
 		slicedComponents := route.pathComponents[1:len(route.pathComponents)]
 		node.addNodesForComponents(slicedComponents, route)
