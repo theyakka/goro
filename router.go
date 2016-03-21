@@ -17,6 +17,9 @@ import (
 	"strings"
 )
 
+// RootPath - the root path
+const RootPath string = "/"
+
 // Router - the primary router type
 type Router struct {
 
@@ -244,10 +247,9 @@ func (r *Router) allowedMethodsForPath(path string) []string {
 
 // findMatchingRoute - find the matching route (if registered) that
 func (r *Router) findMatchingRoute(path string, method string, checkCache bool) (matchedPath string, route *Route, params map[string]interface{}, wasCached bool, matchErrCode int) {
-
 	matchStatus := 0
 	matchPath := path
-	if r.ShouldRedirectTrailingSlash && strings.HasSuffix(path, "/") {
+	if path != RootPath && r.ShouldRedirectTrailingSlash && strings.HasSuffix(path, "/") {
 		matchPath = path[:len(path)-1]
 		matchStatus = http.StatusMovedPermanently
 		if method != "GET" {
@@ -269,8 +271,7 @@ func (r *Router) findMatchingRoute(path string, method string, checkCache bool) 
 	methodHasRoutes := (len(routesTree.nodes) > 0)
 	if methodHasRoutes {
 		// search for a matching route
-		tree := r.methodKeyedRoutes[strings.ToUpper(method)]
-		route, params := tree.RouteForPath(matchPath)
+		route, params := routesTree.RouteForPath(matchPath)
 		didMatchRoute := (route != nil)
 		if didMatchRoute {
 			return matchPath, route, params, false, matchStatus
