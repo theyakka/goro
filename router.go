@@ -268,7 +268,7 @@ func (r *Router) findMatchingRoute(path string, method string, checkCache bool) 
 		}
 	}
 	routesTree := r.methodKeyedRoutes[method]
-	methodHasRoutes := (len(routesTree.nodes) > 0)
+	methodHasRoutes := (routesTree != nil && len(routesTree.nodes) > 0)
 	if methodHasRoutes {
 		// search for a matching route
 		route, params := routesTree.RouteForPath(matchPath)
