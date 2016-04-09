@@ -41,6 +41,7 @@ type Route struct {
 	HasWildcards   bool
 	Handler        http.Handler
 	pathComponents []routeComponent
+	Meta           map[string]interface{}
 }
 
 // NotFoundRoute - placeholder for when a route cannot be matched / found

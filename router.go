@@ -118,9 +118,19 @@ func (r *Router) DELETE(path string, handler http.HandlerFunc) {
 	r.AddRoute("DELETE", path, handler)
 }
 
+// DELETEM - Convenience func for a call using the http DELETE method (inc metadata)
+func (r *Router) DELETEM(path string, meta map[string]interface{}, handler http.HandlerFunc) {
+	r.AddRouteWithMeta("DELETE", path, meta, handler)
+}
+
 // GET - Convenience func for a call using the http GET method
 func (r *Router) GET(path string, handler http.HandlerFunc) {
 	r.AddRoute("GET", path, handler)
+}
+
+// GETM - Convenience func for a call using the http GET method (inc metadata)
+func (r *Router) GETM(path string, meta map[string]interface{}, handler http.HandlerFunc) {
+	r.AddRouteWithMeta("GET", path, meta, handler)
 }
 
 // HEAD - Convenience func for a call using the http HEAD method
@@ -128,9 +138,19 @@ func (r *Router) HEAD(path string, handler http.HandlerFunc) {
 	r.AddRoute("HEAD", path, handler)
 }
 
+// HEADM - Convenience func for a call using the http HEAD method (inc metadata)
+func (r *Router) HEADM(path string, meta map[string]interface{}, handler http.HandlerFunc) {
+	r.AddRouteWithMeta("HEAD", path, meta, handler)
+}
+
 // OPTIONS - Convenience func for a call using the http OPTIONS method
 func (r *Router) OPTIONS(path string, handler http.HandlerFunc) {
 	r.AddRoute("OPTIONS", path, handler)
+}
+
+// OPTIONSM - Convenience func for a call using the http OPTIONS method (inc metadata)
+func (r *Router) OPTIONSM(path string, meta map[string]interface{}, handler http.HandlerFunc) {
+	r.AddRouteWithMeta("OPTIONS", path, meta, handler)
 }
 
 // PATCH - Convenience func for a call using the http PATCH method
@@ -138,9 +158,19 @@ func (r *Router) PATCH(path string, handler http.HandlerFunc) {
 	r.AddRoute("PATCH", path, handler)
 }
 
+// PATCHM - Convenience func for a call using the http PATCH method (inc metadata)
+func (r *Router) PATCHM(path string, meta map[string]interface{}, handler http.HandlerFunc) {
+	r.AddRouteWithMeta("PATCH", path, meta, handler)
+}
+
 // POST - Convenience func for a call using the http POST method
 func (r *Router) POST(path string, handler http.HandlerFunc) {
 	r.AddRoute("POST", path, handler)
+}
+
+// POSTM - Convenience func for a call using the http POST method (inc metadata)
+func (r *Router) POSTM(path string, meta map[string]interface{}, handler http.HandlerFunc) {
+	r.AddRouteWithMeta("POST", path, meta, handler)
 }
 
 // PUT - Convenience func for a call using the http PUT method
@@ -148,8 +178,18 @@ func (r *Router) PUT(path string, handler http.HandlerFunc) {
 	r.AddRoute("PUT", path, handler)
 }
 
+// PUTM - Convenience func for a call using the http PUT method (inc metadata)
+func (r *Router) PUTM(path string, meta map[string]interface{}, handler http.HandlerFunc) {
+	r.AddRouteWithMeta("PUT", path, meta, handler)
+}
+
 // AddRoute - generic interface for registering a route
 func (r *Router) AddRoute(method string, path string, handler http.Handler) error {
+	return r.AddRouteWithMeta(method, path, map[string]interface{}{}, handler)
+}
+
+// AddRouteWithMeta - generic interface for registering a route (inc. metadata)
+func (r *Router) AddRouteWithMeta(method string, path string, meta map[string]interface{}, handler http.Handler) error {
 	if !strings.HasPrefix(path, "/") {
 		// missing slash at the start, we aaaaare out
 		return errors.New("Path value is missing leading slash ('/')")
@@ -177,6 +217,7 @@ func (r *Router) AddRoute(method string, path string, handler http.Handler) erro
 		HasWildcards:   len(wildcards) > 0,
 		Handler:        handler,
 		pathComponents: components,
+		Meta:           meta,
 	}
 
 	// append the method to the allowed methods for this path format
@@ -368,6 +409,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // recoverError - recover from any errors and call the panic handler
 func (r *Router) recoverError(w http.ResponseWriter, req *http.Request) {
 	if panic := recover(); panic != nil {
+		if r.Context != nil {
+			r.Context.Put(req, ContextKeyPanicValue, panic)
+		}
 		r.PanicHandler.ServeHTTP(w, req)
 		return
 	}

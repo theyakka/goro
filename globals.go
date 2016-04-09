@@ -24,6 +24,9 @@ const ContextKeyRouteParams string = "goro.ctkRouteParams"
 // ContextKeyCallWasCached - context value key flag determined if the last call came from the cache
 const ContextKeyCallWasCached string = "goro.ctkCallWasCached"
 
+// ContextKeyPanicValue - context value key for the return value from panic recover
+const ContextKeyPanicValue string = "goro.ctkPanicValue"
+
 // Route constants
 
 // RouteNotFoundMethod - the method attached to the not found route
