@@ -56,8 +56,6 @@ func NewRouteCache() *RouteCache {
 
 // Get - fetch a cache entry (if exists)
 func (rc *RouteCache) Get(path string) CacheEntry {
-	cacheEntry := CacheEntry{}
-	hash := fnv.New32a()
 	if rc.ReorderOnAccess {
 		rc.mutex.Lock()
 		defer rc.mutex.Unlock()
@@ -65,9 +63,11 @@ func (rc *RouteCache) Get(path string) CacheEntry {
 		rc.mutex.RLock()
 		defer rc.mutex.RUnlock()
 	}
+	cacheEntry := CacheEntry{}
+	hash := fnv.New32a()
 	hash.Write([]byte(path))
 	pathHash := hash.Sum32()
-	var foundIdx int
+	var foundIdx int = -1
 	for idx, hashKey := range rc.pathHashes {
 		if hashKey == pathHash {
 			cacheEntry = rc.Entries[idx]
@@ -75,10 +75,12 @@ func (rc *RouteCache) Get(path string) CacheEntry {
 			break
 		}
 	}
-	if rc.ReorderOnAccess {
+	if foundIdx >= 0 && rc.ReorderOnAccess {
 		if len(rc.pathHashes) > 1 {
 			rc.moveEntryToTop(pathHash, foundIdx)
 		}
+	} else {
+		cacheEntry = NotFoundCacheEntry()
 	}
 	return cacheEntry
 }
@@ -92,10 +94,10 @@ func (rc *RouteCache) moveEntryToTop(pathHash uint32, moveIndex int) {
 	allHashes = append(allHashes[:moveIndex], allHashes[lastIndex:]...)
 	allEntries = append(allEntries[:moveIndex], allEntries[lastIndex:]...)
 	// re-add entry
-	allHashes = append([]uint32{pathHash}, allHashes...)
-	allEntries = append([]CacheEntry{entry}, allEntries...)
-	rc.pathHashes = allHashes
-	rc.Entries = allEntries
+	newHashes := append([]uint32{pathHash}, allHashes...)
+	newEntries := append([]CacheEntry{entry}, allEntries...)
+	rc.pathHashes = newHashes
+	rc.Entries = newEntries
 }
 
 // PutRoute - add a route into the route cache
@@ -126,11 +128,12 @@ func (rc *RouteCache) Put(path string, entry CacheEntry) {
 		allEntries = allEntries[:len(allEntries)-1]
 		delete(rc.containsMap, removeHash)
 	}
-	allHashes = append([]uint32{pathHash}, allHashes...)
-	allEntries = append([]CacheEntry{entry}, allEntries...)
+
+	newHashes := append([]uint32{pathHash}, allHashes...)
+	newEntries := append([]CacheEntry{entry}, allEntries...)
 	rc.containsMap[pathHash] = true
-	rc.pathHashes = allHashes
-	rc.Entries = allEntries
+	rc.pathHashes = newHashes
+	rc.Entries = newEntries
 }
 
 // Clear - reset the cache
