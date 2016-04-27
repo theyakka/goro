@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strings"
 )
 
@@ -206,6 +207,7 @@ func (r *Router) AddRouteWithMeta(method string, path string, meta map[string]in
 		}
 	}
 	// split the path into its components to assist matching later
+	pathToUse = filepath.Clean(pathToUse)
 	components, splitErr := splitRoutePathComponents(pathToUse, wildcards)
 	if splitErr != nil {
 		return splitErr
@@ -289,8 +291,8 @@ func (r *Router) allowedMethodsForPath(path string) []string {
 // findMatchingRoute - find the matching route (if registered) that
 func (r *Router) findMatchingRoute(path string, method string, checkCache bool) (matchedPath string, route *Route, params map[string]interface{}, wasCached bool, matchErrCode int) {
 	matchStatus := 0
-	matchPath := path
-	if path != RootPath && r.ShouldRedirectTrailingSlash && strings.HasSuffix(path, "/") {
+	matchPath := filepath.Clean(path)
+	if matchPath != RootPath && r.ShouldRedirectTrailingSlash && strings.HasSuffix(matchPath, "/") {
 		matchPath = path[:len(path)-1]
 		matchStatus = http.StatusMovedPermanently
 		if method != "GET" {
@@ -336,6 +338,7 @@ func (r *Router) findMatchingRoute(path string, method string, checkCache bool) 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	useReq := req
 	usePath := strings.ToLower(useReq.URL.Path) // always compare lower
+	usePath = filepath.Clean(usePath)
 	if r.PanicHandler != nil {
 		// defer errors to the panic handler
 		defer r.recoverError(w, useReq)
