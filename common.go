@@ -10,28 +10,16 @@
 package goro
 
 import (
-	"context"
 	// "fmt"
 	"log"
-	"net/http"
 	"os"
 )
 
 // logger - shared logger instance
 var logger *log.Logger
 
-// ContextHandler - custom HTTP handler that also returns the current Context
-type ContextHandler interface {
-	ServeHTTPContext(context.Context, http.ResponseWriter, *http.Request)
-}
-
-// ContextHandlerFunc - custom HTTP handler function type that also returns the current Context
-type ContextHandlerFunc func(context.Context, http.ResponseWriter, *http.Request)
-
-// ServeHTTPContext - wrapper for required ContextHandler ServeHTTPContext
-func (h ContextHandlerFunc) ServeHTTPContext(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
-	h(ctx, rw, req)
-}
+// RootPath - string representation of the root path
+const RootPath = "/"
 
 // RouteComponentType - route component types
 // NOTE: variables will be stripped out / replaced so we dont track them
@@ -55,6 +43,18 @@ const (
 	HTTPMethodPUT string = "PUT"
 	// HTTPMethodDELETE - DELETE http method
 	HTTPMethodDELETE string = "DELETE"
+)
+
+// DebugLevel - debug information output level
+type DebugLevel int
+
+const (
+	// DebugLevelNone - debugging is off
+	DebugLevelNone DebugLevel = 1 << iota
+	// DebugLevelTimings - show timings only
+	DebugLevelTimings
+	// DebugLevelFull - show all debugging information
+	DebugLevelFull
 )
 
 // initLogger - initializes the shared logger instance

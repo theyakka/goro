@@ -20,7 +20,7 @@ type Node struct {
 	part     string
 	nodeType RouteComponentType
 	regexp   *regexp.Regexp // Not used currently
-	route    *Route
+	routes   map[string]*Route
 	nodes    []*Node
 	parent   *Node
 }
@@ -51,7 +51,7 @@ func (t *Tree) NewNode(part string, parent *Node) *Node {
 		regexp:   nil,
 		nodes:    []*Node{},
 		parent:   parent,
-		route:    nil,
+		routes:   nil,
 	}
 	if parent == nil {
 		t.nodes = append(t.nodes, node)
@@ -68,7 +68,10 @@ func (t *Tree) AddRouteToTree(route *Route, variables map[string]string) {
 	split := strings.Split(deslashedPath, "/")
 	if route.IsRoot() {
 		node := t.NewNode("/", nil)
-		node.route = route
+		if node.routes == nil {
+			node.routes = map[string]*Route{}
+		}
+		node.routes[route.Method] = route
 	} else {
 		var parentNode *Node
 		var node *Node
@@ -89,7 +92,10 @@ func (t *Tree) AddRouteToTree(route *Route, variables map[string]string) {
 			}
 			parentNode = node
 		}
-		node.route = route
+		if node.routes == nil {
+			node.routes = map[string]*Route{}
+		}
+		node.routes[route.Method] = route
 	}
 }
 
@@ -116,6 +122,15 @@ func (node *Node) HasChildren() bool {
 	return node.nodes != nil && len(node.nodes) > 0
 }
 
+// RouteForMethod returns the route that was defined for the method or nil if
+// no route is defined
+func (node *Node) RouteForMethod(method string) *Route {
+	if node.routes != nil && len(node.routes) > 0 {
+		return node.routes[strings.ToUpper(method)]
+	}
+	return nil
+}
+
 // part type helper functions
 func isVariablePart(part string) bool {
 	return strings.HasPrefix(part, "$")
@@ -131,6 +146,6 @@ func isCatchAllPart(part string) bool {
 
 // String is the string representation of the object when printing
 func (node *Node) String() string {
-	return fmt.Sprintf("goro.Node # type=%d, part=%s, children=%d, route=%v",
-		node.nodeType, node.part, len(node.nodes), node.route)
+	return fmt.Sprintf("goro.Node # type=%d, part=%s, children=%d, routes=%v",
+		node.nodeType, node.part, len(node.nodes), node.routes)
 }
