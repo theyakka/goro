@@ -1,4 +1,3 @@
-// domain_map.go
 // Goro
 //
 // Created by Posse in NYC

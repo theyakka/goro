@@ -1,4 +1,3 @@
-// route.go
 // Goro
 //
 // Created by Posse in NYC
@@ -11,64 +10,72 @@
 package goro
 
 import (
-	"errors"
-	"net/http"
 	"strings"
 )
 
-// RouteComponentType - route component types
-// NOTE: variables will be stripped out / replaced so we dont track them
-type RouteComponentType int
-
 const (
-	// ComponentTypeFixed - a fixed path component
-	ComponentTypeFixed RouteComponentType = 1 << iota
-	// ComponentTypeWildcard - a wildcard path component
-	ComponentTypeWildcard
+	// RouteInfoKeyIsRoot - does the route have wildcard parts
+	RouteInfoKeyIsRoot string = "is_root"
+
+	// RouteInfoKeyDescription - does the route have a catch all part
+	RouteInfoKeyDescription string = "description"
 )
 
-// routeComponent - stores information on route components
-type routeComponent struct {
-	Type            RouteComponentType
-	Value           string
-	WildcardMatches []Match
-}
-
-// Route - the primary struct to capture individual route information
+// Route stores all the information about a route
 type Route struct {
-	Method         string
-	PathFormat     string
-	HasWildcards   bool
-	Handler        http.Handler
-	pathComponents []routeComponent
-	Meta           map[string]interface{}
+	Method     string
+	Path       string
+	PathFormat string
+	Handler    ContextHandler
+	Meta       map[string]interface{}
+	Info       map[string]interface{}
+	Nodes      *[]Node
 }
 
-// NotFoundRoute - placeholder for when a route cannot be matched / found
-func NotFoundRoute() *Route {
-	return &Route{
-		Method:     RouteNotFoundMethod,
-		PathFormat: "",
-	}
+// NewRoute creates a new Route instance
+func NewRoute(method string, path string) *Route {
+	return NewRouteWithMeta(method, path, nil)
 }
 
-func splitRoutePathComponents(path string, wildcardMatches []Match) ([]routeComponent, error) {
-	routeComponents := []routeComponent{}
-	routeComponentStrings := strings.Split(path, "/")
-	routeComponentStrings = routeComponentStrings[1:len(routeComponentStrings)]
-	for _, component := range routeComponentStrings {
-		componentType := ComponentTypeFixed
-		if strings.HasPrefix(component, "{") {
-			componentType = ComponentTypeWildcard
-		} else if strings.HasPrefix(component, "{$") {
-			return []routeComponent{}, errors.New("Encountered a variable. Variables should have been substituted already.")
-		}
-		addComponent := routeComponent{
-			Type:            componentType,
-			Value:           component,
-			WildcardMatches: wildcardMatches,
-		}
-		routeComponents = append(routeComponents, addComponent)
+// NewRouteWithMeta creates a new Route instance with meta values
+func NewRouteWithMeta(method string, path string, meta map[string]interface{}) *Route {
+	upMethod := strings.ToUpper(method)
+	routeMeta := meta
+	if routeMeta == nil {
+		routeMeta = map[string]interface{}{}
 	}
-	return routeComponents, nil
+	route := &Route{
+		Method:     upMethod,
+		PathFormat: path,
+		Meta:       routeMeta,
+	}
+	info := map[string]interface{}{}
+	if path == "/" {
+		info[RouteInfoKeyIsRoot] = true
+	}
+	route.Info = info
+	return route
+}
+
+// Handle adds a ContextHandler to the Route
+func (rte *Route) Handle(handler ContextHandler) *Route {
+	rte.Handler = handler
+	return rte
+}
+
+// HandleFunc adds a wrapped ContextHandlerFunc (to ContextHandler) to the Route
+func (rte *Route) HandleFunc(handlerFunc ContextHandlerFunc) *Route {
+	rte.Handler = ContextHandlerFunc(handlerFunc)
+	return rte
+}
+
+// Describe allows you to add a description of the route for other developers
+func (rte *Route) Describe(description string) *Route {
+	rte.Info[RouteInfoKeyDescription] = description
+	return rte
+}
+
+// IsRoot returns true if the Route path is '/'
+func (rte *Route) IsRoot() bool {
+	return rte.Info[RouteInfoKeyIsRoot] == true
 }

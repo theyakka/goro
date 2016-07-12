@@ -1,4 +1,3 @@
-// matcher.go
 // Goro
 //
 // Created by Posse in NYC
@@ -11,114 +10,236 @@
 package goro
 
 import (
+	"fmt"
 	"strings"
+	"time"
 )
 
-type routeMatcher struct {
-	methodKeyedRoutes map[string][]Route
-	registeredRoutes  []Route
-	variables         map[string]interface{}
-}
-
-func NewRouteMatcher() *routeMatcher {
-	return &routeMatcher{
-		methodKeyedRoutes: make(map[string][]Route),
-		registeredRoutes:  make([]Route, 0),
-		variables:         make(map[string]interface{}),
-	}
-}
-
-type StringRange struct {
-	Start  int
-	Length int
-}
-
-type Match struct {
-	Type          string
-	Value         string
-	OriginalValue string
-	Range         StringRange
-}
-
+// Matcher is the global matching engine
 type Matcher struct {
-	inMatch     bool
-	startIndex  int
-	stringValue string
-	startDelim  string
-	endDelim    string
-	matches     []Match
+	router       *Router
+	LogMatchTime bool
 }
 
-// matcher functions
-// --
-
-// NewMatcher - creates a new default Matcher instance
-func NewMatcher(stringValue string, startDelim string, endDelim string) *Matcher {
-	m := &Matcher{
-		inMatch:     false,
-		startIndex:  0,
-		stringValue: stringValue,
-		startDelim:  startDelim,
-		endDelim:    endDelim,
-		matches:     make([]Match, 0),
-	}
-	return m
+// Match represents a matched node in the tree
+type Match struct {
+	Node           *Node
+	WildcardValues map[string]string
+	CatchAllValue  string
+	ParentMatch    *Match
 }
 
-// NextMatch - find the next string match, if no additional match is found,
-// 			   		 returns a match with .Range == StringRangeNotFound()
-func (m *Matcher) NextMatch() Match {
-	// out of bounds .. we are done
-	if m.startIndex > len(m.stringValue)-1 {
-		return NotFoundMatch()
+// NewMatch creates a new Match instance
+func NewMatch(node *Node) *Match {
+	return &Match{
+		Node:           node,
+		WildcardValues: map[string]string{},
+		CatchAllValue:  "",
+	}
+}
+
+// NewMatchWithParent creates a new instance of a match that passes down the values from
+// the parent match
+func NewMatchWithParent(node *Node, parentMatch *Match) *Match {
+	match := &Match{
+		Node:           node,
+		WildcardValues: map[string]string{},
+		CatchAllValue:  "",
+	}
+	match.ParentMatch = parentMatch
+	if parentMatch != nil {
+		match.WildcardValues = map[string]string{}
+		// need to copy
+		for key, value := range parentMatch.WildcardValues {
+			match.WildcardValues[key] = value
+		}
+		match.CatchAllValue = parentMatch.CatchAllValue
+	}
+	return match
+}
+
+func (match *Match) String() string {
+	return fmt.Sprintf("goro.Match # part=%s, wc=%v, ca=%v",
+		match.Node.part, match.WildcardValues, match.CatchAllValue)
+}
+
+// NewMatcher creates a new instance of the Matcher
+func NewMatcher(router *Router) *Matcher {
+	return &Matcher{
+		router:       router,
+		LogMatchTime: false,
+	}
+}
+
+// MatchPathToRoute attempts to match the given path to a registered Route
+func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
+	startTime := time.Now()
+	upMethod := strings.ToUpper(method)
+	tree := m.router.methodKeyedRoutes[upMethod]
+	if tree == nil {
+		return nil // no routes registered for this method
 	}
 
-	startIdx, str := 0, m.stringValue[m.startIndex:]
-	rangeStart := 0
-	for cidx, c := range str {
-		if !m.inMatch && string(c) == m.startDelim {
-			m.inMatch = true
-			startIdx = cidx
-			rangeStart = cidx + m.startIndex
-		} else if m.inMatch && string(c) == m.endDelim {
-			nextIndex := cidx + 1
-			m.inMatch = false
-			m.startIndex = m.startIndex + nextIndex
-			val := str[startIdx:nextIndex]
-			matchType := "wildcard"
-			if strings.HasPrefix(val, "{$") {
-				matchType = "variable"
-			}
-			match := Match{
-				Type:          matchType,
-				OriginalValue: m.stringValue,
-				Value:         val,
-				Range:         newStringRange(rangeStart, nextIndex-startIdx),
-			}
-			return match
+	nodesToCheck := tree.nodes
+	var currentMatches []*Match
+	candidate := NewMatchCandidate(path)
+	if path == "/" {
+		candidate.part = "/"
+	}
+	finalMatches := []*Match{}
+	catchAlls := []*Match{}
+	// loop until no more match candidates
+	for candidate != NoMatchCandidate() {
+		var matches []*Match
+		var catchAllMatches []*Match
+		if currentMatches == nil {
+			matches, catchAllMatches = matchNodesForCandidate(candidate, nodesToCheck)
+		} else {
+			matches, catchAllMatches = matchCurrentMatchesForCandidate(candidate, currentMatches)
+		}
+		if len(catchAllMatches) > 0 {
+			// append the old catch alls to the new ones so the deeper matches take precedent
+			catchAlls = append(catchAllMatches, catchAlls...)
+		}
+		if len(matches) == 0 {
+			break
+		}
+		currentMatches = matches
+		if candidate.HasRemainingCandidates() {
+			candidate = candidate.NextCandidate()
+		} else {
+			finalMatches = append(finalMatches, matches...)
 		}
 	}
-	return NotFoundMatch()
+
+	// fmt.Println("")
+	// fmt.Println("")
+	// log.Println("-----")
+	// log.Println("final matches: ", finalMatches)
+	// log.Println("catch alls:    ", catchAlls)
+
+	var matchToUse *Match
+	if len(finalMatches) > 0 {
+		matchToUse = finalMatches[0]
+	} else if len(catchAlls) > 0 {
+		matchToUse = catchAlls[0]
+	}
+
+	// fmt.Println("")
+	// log.Println("-----")
+	// log.Println("final match:   ", matchToUse)
+	if m.LogMatchTime {
+		endTime := time.Now()
+		Log("Matched in", endTime.Sub(startTime))
+	}
+
+	return matchToUse
 }
 
-func NotFoundMatch() Match {
-	return Match{
-		Type:          "notfound",
-		Value:         "",
-		OriginalValue: "",
-		Range:         notFoundStringRange(),
+func matchNodesForCandidate(candidate MatchCandidate, nodes []*Node) (matches []*Match, catchalls []*Match) {
+	if candidate != NoMatchCandidate() {
+		return checkNodesForMatches(candidate, nodes, nil)
+	}
+	return []*Match{}, []*Match{}
+}
+
+func matchCurrentMatchesForCandidate(candidate MatchCandidate, currentMatches []*Match) (matches []*Match, catchalls []*Match) {
+	matchedNodes := []*Match{}
+	catchAllNodes := []*Match{}
+	for _, match := range currentMatches {
+		node := match.Node
+		if node.HasChildren() {
+			nodeMatches, nodeCatchAlls := checkNodesForMatches(candidate, node.nodes, match)
+			matchedNodes = append(matchedNodes, nodeMatches...)
+			catchAllNodes = append(catchAllNodes, nodeCatchAlls...)
+		}
+	}
+	return matchedNodes, catchAllNodes
+}
+
+func checkNodesForMatches(candidate MatchCandidate, nodes []*Node, parentMatch *Match) (matches []*Match, catchalls []*Match) {
+	matchedNodes := []*Match{}
+	catchAllNodes := []*Match{}
+	for _, node := range nodes {
+		isWildcard := isWildcardPart(node.part)
+		if (node.nodeType == ComponentTypeFixed && node.part == candidate.part) ||
+			isWildcard {
+			match := NewMatchWithParent(node, parentMatch)
+			if isWildcard {
+				match.WildcardValues[node.part[1:len(node.part)]] = candidate.part
+			}
+			if !candidate.HasRemainingCandidates() {
+				if match.Node.route != nil {
+					matchedNodes = append(matchedNodes, match)
+					break
+				}
+			} else {
+				matchedNodes = append(matchedNodes, match)
+			}
+		} else if isCatchAllPart(node.part) {
+			match := NewMatchWithParent(node, parentMatch)
+			match.CatchAllValue = candidate.currentPath
+			catchAllNodes = append(catchAllNodes, match)
+			if !candidate.HasRemainingCandidates() {
+				break
+			}
+		}
+	}
+	// log.Println("pass matched:")
+	// log.Println(" - nodes:     ", matchedNodes)
+	// log.Println(" - sub nodes:     ", matchedSubNodes)
+	// log.Println(" - catch alls:", catchAllNodes)
+	return matchedNodes, catchAllNodes
+}
+
+// MatchCandidate is a helper class for matching path components
+type MatchCandidate struct {
+	part        string
+	remainder   string
+	currentPath string
+}
+
+// NewMatchCandidate creates a new match candidate instance and initializes if for the first part
+func NewMatchCandidate(path string) MatchCandidate {
+
+	cleanPath := path
+	if strings.HasPrefix(path, "/") {
+		cleanPath = path[1:len(path)]
+	}
+	split := strings.SplitN(cleanPath, "/", 2)
+	candidate := MatchCandidate{
+		part:        split[0],
+		remainder:   "",
+		currentPath: cleanPath,
+	}
+	if len(split) == 2 {
+		candidate.remainder = split[1]
+	}
+	return candidate
+}
+
+// NextCandidate returns the next MatchCandidate in the full path
+func (mc MatchCandidate) NextCandidate() MatchCandidate {
+	if mc.remainder == "" {
+		return NoMatchCandidate()
+	}
+	return NewMatchCandidate(mc.remainder)
+}
+
+// HasRemainingCandidates returns true if the MatchCandidate has more candidate parts
+func (mc MatchCandidate) HasRemainingCandidates() bool {
+	return mc.remainder != ""
+}
+
+// NoMatchCandidate represents an empty MatchCandidate
+func NoMatchCandidate() MatchCandidate {
+	return MatchCandidate{
+		part:      "",
+		remainder: "",
 	}
 }
 
-// string range functions
-// --
-
-// NewStringRange - helper to generate new string range
-func newStringRange(start int, length int) StringRange {
-	return StringRange{Start: start, Length: length}
-}
-
-// StringRangeNotFound - not found value
-func notFoundStringRange() StringRange {
-	return StringRange{Start: -1, Length: 0}
+// IsNoMatch returns true if the MatchCandidate equals the NoMatchCandidate value
+func (mc MatchCandidate) IsNoMatch() bool {
+	return mc == NoMatchCandidate()
 }

@@ -1,4 +1,3 @@
-// cache.go
 // Goro
 //
 // Created by Posse in NYC
@@ -67,7 +66,7 @@ func (rc *RouteCache) Get(path string) CacheEntry {
 	hash := fnv.New32a()
 	hash.Write([]byte(path))
 	pathHash := hash.Sum32()
-	var foundIdx int = -1
+	var foundIdx = -1
 	for idx, hashKey := range rc.pathHashes {
 		if hashKey == pathHash {
 			cacheEntry = rc.Entries[idx]
