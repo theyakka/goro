@@ -141,21 +141,42 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// check to see if we have a matching route
+	matchError := ""
+	matchErrorCode := 0
 	match := r.routeMatcher.MatchPathToRoute(method, usePath)
 	if match != nil {
 		Log("Match:", match)
 		// TODO - error checking
 		route := match.Node.routes[method]
-		handler := route.Handler
-		if handler != nil {
-			handler.ServeHTTPContext(outCtx, w, req)
+		if route != nil {
+			handler := route.Handler
+			if handler != nil {
+				handler.ServeHTTPContext(outCtx, w, req)
+				return
+			}
+		} else {
+			matchError = "Method Not Allowed"
+			matchErrorCode = http.StatusMethodNotAllowed
 		}
 	} else {
-		if r.NotFoundHandler != nil {
-			r.NotFoundHandler.ServeHTTPContext(outCtx, w, req)
-		} else {
-			errorHandler(w, req, "Not found", http.StatusNotFound)
+		matchError = "Not Found"
+		matchErrorCode = http.StatusNotFound
+	}
+
+	if matchErrorCode != 0 {
+		// not found error
+		if matchErrorCode == http.StatusNotFound {
+			if r.NotFoundHandler != nil {
+				r.NotFoundHandler.ServeHTTPContext(outCtx, w, req)
+				return
+			}
 		}
+		// method not allowed
+		if matchErrorCode == http.StatusMethodNotAllowed {
+			return
+		}
+		// return a generic http error
+		errorHandler(w, req, matchError, matchErrorCode)
 	}
 }
 

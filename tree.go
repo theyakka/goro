@@ -122,6 +122,15 @@ func (node *Node) HasChildren() bool {
 	return node.nodes != nil && len(node.nodes) > 0
 }
 
+// RouteForMethod returns the route that was defined for the method or nil if
+// no route is defined
+func (node *Node) RouteForMethod(method string) *Route {
+	if node.routes != nil && len(node.routes) > 0 {
+		return node.routes[strings.ToUpper(method)]
+	}
+	return nil
+}
+
 // part type helper functions
 func isVariablePart(part string) bool {
 	return strings.HasPrefix(part, "$")

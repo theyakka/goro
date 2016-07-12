@@ -34,7 +34,7 @@ func TestMain(t *testing.T) {
 	router.AddStringVariable("idval", ":id")
 
 	router.Add("GET", "/").HandleFunc(rootHandler)
-	router.Add("GET", "/users/$idval/:action")
+	// router.Add("GET", "/users/$idval/:action")
 	router.Add("GET", "/users/$idval/show")
 	router.Add("GET", "/users/$idval/*")
 	router.Add("GET", "/users/$idval/show/:prrrrrr")
