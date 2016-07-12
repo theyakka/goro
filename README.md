@@ -1,81 +1,71 @@
+
+<img src="https://raw.githubusercontent.com/goposse/goro/assets/goro_logo.png" align="center" width="172">
+
 # goro
 
-Goro is a routing toolkit for Go web applications. It is designed to be fast yet flexible.
+Goro is a mighty fine routing toolkit for Go web applications. It is designed to
+be fast, yet flexible.
 
-## The parts
+# Installing
 
-- **Router**: Designed for speed but meant to be flexible
-- **Domain Mapper**: For domain / sub-domain mapping
-- **Handler Chainer**: Flexible `http.Handler` chaining
-- **Context**: Get/Set values as part of the request/response flow
+**Goro requires Go 1.7+.** Goro requires the new `Context` functionality of the Go `1.7`
+standard library. Its an inconvenience but its a great base for the future.
 
-
-## Features
-
-**http.Handler compatible**
-
-Goro is fully compatible with standard Go `http.Handler` inferfaces (if you're not using the `Chainer`). No wrapping, no mess, no fuss, no BS. 
-
-**Flexible route matching**
-
-
-**(Sub)domain routing**
-
-Built in mapping for sub-domain routing provided as a wrapper so as to not complicate the core routing experience. If you don't want/need to use it, then you can focus on pure routing speed.
-
-
-**Route Filtering**
-
-Often you need to deal with a request in a special way. Filtering allows you to modify requests **before** they hit the router logic.
-
-
-**Handler Chaining**
-
-We love the chainers that exist, but we felt like it should be something that
-
-**Request-based Contexts**
-
-## How does it work?
-
-**Simple example**
-
-You can set up a simple routing configuration such as the following:
-
-```go
-
-package main
-
-import (
-    "net/http"
-    "github.com/goposse/goro"
-)
-
-var context goro.Context
-
-// Users.Find
-func UsersFindHandler(w http.ResponseWriter, req *http.Request) {
-    userID := context.Get("id")
-    // find user with this ID
-}
-
-func main() {
-    context := goro.NewContext()
-    router := goro.NewRouter()
-    router.Context = context
-    router.GET("/users/{id}", UsersFindHandler)
-
-    log.Fatal(http.ListenAndServe(":8080", router))
-}
-```
-
-Straightforward as hell.
-
-**Reusing things**
-
-Sometimes you have a set of requirements that you use often. Goro makes re-using wildcards or substituting values easy.
-
-```go
+To install, run:
 
 ```
+go get -u github.com/goposse/goro
+```
 
+You can then import goro using:
 
+```
+import github.com/goposse/goro
+```
+
+# Getting started
+
+The basic code breakdown looks something like this:
+
+```go
+router := goro.NewRouter()
+router.Add("GET", "/").HandleFunc(rootHandler)
+http.ListenAndServe(":8080", router)
+```
+
+Pretty standard for most routers in Go. But Goro has so much more going for it. Rather
+than try to describe it all here, you should check out [The Goro Guide](https://github.com/goposse/goro/wiki).
+
+# FAQ
+
+## Why should I use this and not ____?
+
+I'm not going to make any claims that Goro is the fastest router on the market or that it'll make you a million bucks. The likelihood is that even if those were true for you, they might not be for others.
+
+What we *will* say is that here at Posse we have tried A LOT of web frameworks over many languages and that we invested in making Goro out of unhappiness with what we saw generally. If you're here, then maybe you have also.
+
+Goro was designed from the ground up as a Router that we wanted to use and not to copy anyone else. It has the features we think are important, and is architected in a way that we think makes managing all this stuff super simple.
+
+Give it a try and if you like it, let us know! Either way, we love feedback.
+
+## Has it been tested in production? Can I use it in production?
+
+The code here has been written based on Posse's experiences with clients of all sizes. It has been production tested. That said, code is always evolving. We plan to keep on using it in production but we also plan to keep on improving it. If you find a bug, let us know!
+
+## Who the f*ck is Posse?
+
+We're the best friggin mobile shop in NYC that's who. Hey, but we're biased. Our stuff is at [http://goposse.com](http://goposse.com). Go check it out.
+
+# Outro
+
+## Credits
+
+Haitch is sponsored, owned and maintained by [Posse Productions LLC](http://goposse.com). Follow us on Twitter [@goposse](https://twitter.com/goposse). Feel free to reach out with suggestions, ideas or to say hey.
+
+### Security
+
+If you believe you have identified a serious security vulnerability or issue with Goro, please report it as soon as possible to apps@goposse.com. Please refrain from posting it to the public issue tracker so that we have a chance to address it and notify everyone accordingly.
+
+## License
+
+Goro is released under a modified MIT license. See LICENSE for details.

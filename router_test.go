@@ -10,10 +10,80 @@
 package goro
 
 import (
-	"log"
+	"context"
+	"fmt"
+	"net/http"
 	"testing"
 )
 
-func TestRouter(t *testing.T) {
-	log.Println("Test complete")
+type TestFilter struct {
+}
+
+func testHandler1(rw http.ResponseWriter, req *http.Request) {
+	Log("Test1")
+}
+
+func testHandler2(rw http.ResponseWriter, req *http.Request) {
+	Log("Test2")
+}
+
+func testHandler3(rw http.ResponseWriter, req *http.Request) {
+	Log("Test3")
+}
+
+func (tf TestFilter) ExecuteFilter(req **http.Request) {
+	oldReq := *req
+	newCtx := context.WithValue(oldReq.Context(), "TESTVAL", "this is a test")
+	*req = oldReq.WithContext(newCtx)
+}
+
+func okHandler(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	Log("OK!")
+	fmt.Fprintf(rw, "OK: called '%s' -> %s", ctx.Value("path"), req.Method)
+}
+
+func errHandler(rw http.ResponseWriter, req *http.Request) {
+	fmt.Fprint(rw, "error")
+}
+
+func TestMain(t *testing.T) {
+
+	domains := NewDomainMap()
+	router := domains.NewRouter("^(?:www+[.])*(localhost.local)(?::\\d+)?")
+	router.SetDebugLevel(DebugLevelTimings)
+
+	testFilter := TestFilter{}
+	router.AddFilter(testFilter)
+
+	router.AddStaticWithPrefix("./assets", "assets")
+	router.AddStaticWithPrefix("./test", "test")
+
+	chain := NewChain()
+	chain.AddFunc(testHandler1, testHandler3, testHandler2)
+
+	// error handlers
+	// router.SetErrorHandlerFunc(http.StatusNotFound, errHandler)
+	// router.SetErrorHandlerFunc(http.StatusMethodNotAllowed, errHandler)
+
+	router.Add("GET", "/").
+		HandleFunc(okHandler).Describe("The root route")
+	router.Add("GET", "/users/:id/*").
+		HandleFunc(okHandler)
+	router.Add("GET", "/users/:id/show").
+		Handle(chain.ThenFunc(okHandler))
+	router.Add("POST", "/users/:id/show").
+		HandleFunc(okHandler).Describe("POST form of the route")
+	router.Add("GET", "/users/:id/:action").
+		HandleFunc(okHandler)
+	router.Add("GET", "/users/:id/show/:what").
+		HandleFunc(okHandler)
+	router.Add("GET", "/*").
+		HandleFunc(okHandler)
+
+	router.PrintRoutes()
+
+	Log("Server running on :8080")
+	fmt.Println("")
+	http.ListenAndServe(":8080", domains)
 }

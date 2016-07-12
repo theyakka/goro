@@ -73,9 +73,9 @@ func NewMatcher(router *Router) *Matcher {
 
 // MatchPathToRoute attempts to match the given path to a registered Route
 func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
+
 	startTime := time.Now()
-	upMethod := strings.ToUpper(method)
-	tree := m.router.methodKeyedRoutes[upMethod]
+	tree := m.router.routes
 	if tree == nil {
 		return nil // no routes registered for this method
 	}
@@ -83,8 +83,8 @@ func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
 	nodesToCheck := tree.nodes
 	var currentMatches []*Match
 	candidate := NewMatchCandidate(path)
-	if path == "/" {
-		candidate.part = "/"
+	if path == RootPath {
+		candidate.part = RootPath
 	}
 	finalMatches := []*Match{}
 	catchAlls := []*Match{}
@@ -93,9 +93,13 @@ func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
 		var matches []*Match
 		var catchAllMatches []*Match
 		if currentMatches == nil {
-			matches, catchAllMatches = matchNodesForCandidate(candidate, nodesToCheck)
+			matches, catchAllMatches, _ = matchNodesForCandidate(method, candidate, nodesToCheck)
+			// Log("++", candidate.part)
+			// Log("++", matches)
 		} else {
-			matches, catchAllMatches = matchCurrentMatchesForCandidate(candidate, currentMatches)
+			matches, catchAllMatches, _ = matchCurrentMatchesForCandidate(method, candidate, currentMatches)
+			// Log("--", candidate.part)
+			// Log("--", matches)
 		}
 		if len(catchAllMatches) > 0 {
 			// append the old catch alls to the new ones so the deeper matches take precedent
@@ -105,18 +109,19 @@ func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
 			break
 		}
 		currentMatches = matches
-		if candidate.HasRemainingCandidates() {
-			candidate = candidate.NextCandidate()
-		} else {
+		if !candidate.HasRemainingCandidates() {
 			finalMatches = append(finalMatches, matches...)
+			break
+		} else {
+			candidate = candidate.NextCandidate()
 		}
 	}
 
 	// fmt.Println("")
 	// fmt.Println("")
-	// log.Println("-----")
-	// log.Println("final matches: ", finalMatches)
-	// log.Println("catch alls:    ", catchAlls)
+	// Log("-----")
+	// Log("final matches: ", finalMatches)
+	// Log("catch alls:    ", catchAlls)
 
 	var matchToUse *Match
 	if len(finalMatches) > 0 {
@@ -126,40 +131,46 @@ func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
 	}
 
 	// fmt.Println("")
-	// log.Println("-----")
-	// log.Println("final match:   ", matchToUse)
+	// Log("-----")
+	// Log("final match:   ", matchToUse)
+
 	if m.LogMatchTime {
 		endTime := time.Now()
 		Log("Matched in", endTime.Sub(startTime))
 	}
-
 	return matchToUse
 }
 
-func matchNodesForCandidate(candidate MatchCandidate, nodes []*Node) (matches []*Match, catchalls []*Match) {
+func matchNodesForCandidate(method string, candidate MatchCandidate, nodes []*Node) (matches []*Match, catchalls []*Match, errorCode int) {
 	if candidate != NoMatchCandidate() {
-		return checkNodesForMatches(candidate, nodes, nil)
+		return checkNodesForMatches(method, candidate, nodes, nil)
 	}
-	return []*Match{}, []*Match{}
+	return []*Match{}, []*Match{}, 0
 }
 
-func matchCurrentMatchesForCandidate(candidate MatchCandidate, currentMatches []*Match) (matches []*Match, catchalls []*Match) {
+func matchCurrentMatchesForCandidate(method string, candidate MatchCandidate, currentMatches []*Match) (matches []*Match, catchalls []*Match, errorCode int) {
 	matchedNodes := []*Match{}
 	catchAllNodes := []*Match{}
+	errCode := 0
 	for _, match := range currentMatches {
 		node := match.Node
 		if node.HasChildren() {
-			nodeMatches, nodeCatchAlls := checkNodesForMatches(candidate, node.nodes, match)
+			nodeMatches, nodeCatchAlls, matchErrCode := checkNodesForMatches(method, candidate, node.nodes, match)
 			matchedNodes = append(matchedNodes, nodeMatches...)
 			catchAllNodes = append(catchAllNodes, nodeCatchAlls...)
+			if errCode != 0 {
+				errCode = matchErrCode
+			}
 		}
 	}
-	return matchedNodes, catchAllNodes
+	return matchedNodes, catchAllNodes, errCode
 }
 
-func checkNodesForMatches(candidate MatchCandidate, nodes []*Node, parentMatch *Match) (matches []*Match, catchalls []*Match) {
+func checkNodesForMatches(method string, candidate MatchCandidate, nodes []*Node, parentMatch *Match) (matches []*Match, catchalls []*Match, errorCode int) {
 	matchedNodes := []*Match{}
 	catchAllNodes := []*Match{}
+	errCode := 0
+
 	for _, node := range nodes {
 		isWildcard := isWildcardPart(node.part)
 		if (node.nodeType == ComponentTypeFixed && node.part == candidate.part) ||
@@ -168,28 +179,18 @@ func checkNodesForMatches(candidate MatchCandidate, nodes []*Node, parentMatch *
 			if isWildcard {
 				match.WildcardValues[node.part[1:len(node.part)]] = candidate.part
 			}
+			matchedNodes = append(matchedNodes, match)
 			if !candidate.HasRemainingCandidates() {
-				if match.Node.route != nil {
-					matchedNodes = append(matchedNodes, match)
-					break
-				}
-			} else {
-				matchedNodes = append(matchedNodes, match)
+				break // break early, we found a match
 			}
 		} else if isCatchAllPart(node.part) {
 			match := NewMatchWithParent(node, parentMatch)
 			match.CatchAllValue = candidate.currentPath
 			catchAllNodes = append(catchAllNodes, match)
-			if !candidate.HasRemainingCandidates() {
-				break
-			}
 		}
 	}
-	// log.Println("pass matched:")
-	// log.Println(" - nodes:     ", matchedNodes)
-	// log.Println(" - sub nodes:     ", matchedSubNodes)
-	// log.Println(" - catch alls:", catchAllNodes)
-	return matchedNodes, catchAllNodes
+
+	return matchedNodes, catchAllNodes, errCode
 }
 
 // MatchCandidate is a helper class for matching path components
@@ -201,7 +202,6 @@ type MatchCandidate struct {
 
 // NewMatchCandidate creates a new match candidate instance and initializes if for the first part
 func NewMatchCandidate(path string) MatchCandidate {
-
 	cleanPath := path
 	if strings.HasPrefix(path, "/") {
 		cleanPath = path[1:len(path)]

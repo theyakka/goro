@@ -21,7 +21,7 @@ type DomainMap struct {
 	matchedHosts       map[string]*Router
 
 	// NotFoundHandler - if the (sub)domain is not mapped, call this handler
-	NotFoundHandler http.HandlerFunc
+	NotFoundHandler http.Handler
 }
 
 // NewDomainMap - creates a new domain map
@@ -37,35 +37,42 @@ func (domainMap *DomainMap) InvalidateMatchedHosts() {
 	domainMap.matchedHosts = make(map[string]*Router)
 }
 
-// RegisterRouter - Register a router for a domain pattern (regex)
-func (domainMap *DomainMap) RegisterRouter(pattern string, router *Router) {
-	domainMap.orderedPatterns = append(domainMap.orderedPatterns, pattern)
-	domainMap.registeredPatterns[pattern] = router
+// NewRouter - Creates a new Router, registers it in the domain map and returns it for use
+func (domainMap *DomainMap) NewRouter(subdomain string) *Router {
+	router := NewRouter()
+	domainMap.AddRouter(subdomain, router)
+	return router
 }
 
-func (domainMap *DomainMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// AddRouter - Register a router for a domain pattern (regex)
+func (domainMap *DomainMap) AddRouter(subdomain string, router *Router) {
+	domainMap.orderedPatterns = append(domainMap.orderedPatterns, subdomain)
+	domainMap.registeredPatterns[subdomain] = router
+}
+
+func (domainMap *DomainMap) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// check cached handlers (keyed on host)
 	for host, router := range domainMap.matchedHosts {
-		if r.Host == host {
-			router.ServeHTTP(w, r)
+		if req.Host == host {
+			router.ServeHTTP(w, req)
 			return
 		}
 	}
 	// no cached handler found, consult the registered patterns
 	for _, pattern := range domainMap.orderedPatterns {
 		regex, _ := regexp.Compile(pattern)
-		if regex.MatchString(r.Host) {
+		if regex.MatchString(req.Host) {
 			router := domainMap.registeredPatterns[pattern]
-			router.ServeHTTP(w, r)
-			domainMap.matchedHosts[r.Host] = router
+			router.ServeHTTP(w, req)
+			domainMap.matchedHosts[req.Host] = router
 			return
 		}
 	}
 
 	if domainMap.NotFoundHandler != nil {
-		domainMap.NotFoundHandler(w, r)
+		domainMap.NotFoundHandler.ServeHTTP(w, req)
 	} else {
 		// no handler & no matches found. fail.
-		http.Error(w, "Forbidden", 403)
+		errorHandler(w, req, "Forbidden", http.StatusForbidden)
 	}
 }
