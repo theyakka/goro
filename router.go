@@ -32,7 +32,7 @@ type Router struct {
 	variables map[string]string
 
 	// methodKeyedRoutes - all routes registered with the router
-	methodKeyedRoutes map[string]*Tree
+	routes *Tree
 
 	globalHandlers map[string]ContextHandler
 
@@ -43,11 +43,11 @@ type Router struct {
 // NewRouter - creates a new default instance of the Router type
 func NewRouter() *Router {
 	router := &Router{
-		globalContext:     context.Background(),
-		variables:         map[string]string{},
-		methodKeyedRoutes: map[string]*Tree{},
-		globalHandlers:    map[string]ContextHandler{},
-		debugMode:         false,
+		globalContext:  context.Background(),
+		variables:      map[string]string{},
+		routes:         &Tree{},
+		globalHandlers: map[string]ContextHandler{},
+		debugMode:      false,
 	}
 	router.routeMatcher = NewMatcher(router)
 	return router
@@ -77,12 +77,7 @@ func (r *Router) Add(method string, path string) *Route {
 
 // Use registers a Route instance within the Router
 func (r *Router) Use(route *Route) *Route {
-	methodTree := r.methodKeyedRoutes[route.Method]
-	if methodTree == nil {
-		methodTree = NewTree()
-	}
-	methodTree.AddRouteToTree(route, r.variables)
-	r.methodKeyedRoutes[route.Method] = methodTree
+	r.routes.AddRouteToTree(route, r.variables)
 	return route
 }
 
@@ -107,13 +102,9 @@ func (r *Router) AddStringVariable(variable string, value string) {
 
 // PrintTreeInfo prints debugging information about all registered Routes
 func (r *Router) PrintTreeInfo() {
-	for method, tree := range r.methodKeyedRoutes {
-		fmt.Println("method: ", method)
-		for _, node := range tree.nodes {
-			fmt.Println(" - ", node)
-			printSubNodes(node, 0)
-		}
-		fmt.Println("")
+	for _, node := range r.routes.nodes {
+		fmt.Println(" - ", node)
+		printSubNodes(node, 0)
 	}
 }
 
@@ -153,7 +144,8 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	match := r.routeMatcher.MatchPathToRoute(method, usePath)
 	if match != nil {
 		Log("Match:", match)
-		route := match.Node.route
+		// TODO - error checking
+		route := match.Node.routes[method]
 		handler := route.Handler
 		if handler != nil {
 			handler.ServeHTTPContext(outCtx, w, req)
