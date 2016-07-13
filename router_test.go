@@ -12,21 +12,20 @@ package goro
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"testing"
 )
 
 func rootHandler(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
-	log.Println("root")
+	Log("root")
 }
 
 func testThisThing(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
-	log.Println("HERE!!!")
-	log.Println("ctx:", ctx.Value("path"))
+	Log("HERE!!!")
+	Log("ctx:", ctx.Value("path"))
 }
 
-func notFoundHandler(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
+func errHandler(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
 	Log(ctx)
 	fmt.Fprint(rw, "error")
 }
@@ -36,10 +35,9 @@ func TestMain(t *testing.T) {
 	router := NewRouter()
 	router.EnableDebugMode(true)
 
-	router.AddStringVariable("someop", "turnip")
-	router.AddStringVariable("idval", ":id")
-
-	router.SetErrorHandlerFunc(http.StatusNotFound, notFoundHandler)
+	// error handlers
+	router.SetErrorHandlerFunc(http.StatusNotFound, errHandler)
+	router.SetErrorHandlerFunc(http.StatusMethodNotAllowed, errHandler)
 
 	router.Add("GET", "/").HandleFunc(rootHandler).Describe("The root route")
 	// router.Add("GET", "/users/$idval/:action")
@@ -50,6 +48,6 @@ func TestMain(t *testing.T) {
 
 	// router.PrintTreeInfo()
 
-	log.Println("Server running on :8080")
+	Log("Server running on :8080")
 	http.ListenAndServe(":8080", router)
 }
