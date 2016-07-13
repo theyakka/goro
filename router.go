@@ -130,8 +130,8 @@ func (r *Router) AddFilter(filter Filter) {
 	r.filters = append(r.filters, filter)
 }
 
-// AddStringVariable adds a string variable value for substitution
-func (r *Router) AddStringVariable(variable string, value string) {
+// SetStringVariable adds a string variable value for substitution
+func (r *Router) SetStringVariable(variable string, value string) {
 	varname := variable
 	if !strings.HasPrefix(varname, "$") {
 		varname = "$" + varname
