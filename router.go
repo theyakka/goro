@@ -22,6 +22,8 @@ type Router struct {
 	// errorHandlers - map status codes to specific handlers
 	errorHandlers map[int]ContextHandler
 
+	filters []Filter
+
 	// ErrorHandler - generic error handler
 	ErrorHandler ContextHandler
 
@@ -56,6 +58,7 @@ func NewRouter() *Router {
 		cache:          NewRouteCache(),
 		errorHandlers:  map[int]ContextHandler{},
 		ErrorHandler:   nil,
+		filters:        nil,
 	}
 	router.routeMatcher = NewMatcher(router)
 	return router
@@ -112,6 +115,10 @@ func (r *Router) SetErrorHandlerFunc(statusCode int, handler ContextHandlerFunc)
 	r.SetErrorHandler(statusCode, ContextHandler(handler))
 }
 
+func (r *Router) AddFilter(filter Filter) {
+	r.filters = append(r.filters, filter)
+}
+
 // AddStringVariable adds a string variable value for substitution
 func (r *Router) AddStringVariable(variable string, value string) {
 	varname := variable
@@ -154,6 +161,17 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	outCtx := context.WithValue(r.globalContext, "path", usePath)
 
+	if r.filters != nil {
+		for _, filter := range r.filters {
+			updatedCtx := filter.ExecuteFilter(outCtx, req)
+			if updatedCtx != nil {
+				outCtx = updatedCtx
+			}
+		}
+	}
+
+	Log(outCtx)
+
 	// check to see if a global handler has been registered for the method
 	globalHandler := r.globalHandlers[method]
 	if globalHandler != nil {
@@ -167,11 +185,14 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	matchErrorCode := 0
 	match := r.routeMatcher.MatchPathToRoute(method, usePath)
 	if match != nil && len(match.Node.routes) > 0 {
-		Log("Match:", match)
 		route := match.Node.RouteForMethod(method)
 		if route != nil {
 			handler := route.Handler
 			if handler != nil {
+				outCtx = context.WithValue(outCtx, "params", match.WildcardValues)
+				if match.CatchAllValue != "" {
+					outCtx = context.WithValue(outCtx, "catchAll", match.CatchAllValue)
+				}
 				handler.ServeHTTPContext(outCtx, w, req)
 				return
 			}

@@ -16,7 +16,16 @@ import (
 	"testing"
 )
 
+type TestFilter struct {
+}
+
+func (tf TestFilter) ExecuteFilter(ctx context.Context, req *http.Request) context.Context {
+	newCtx := context.WithValue(ctx, "TESTING!!!", "this is a test")
+	return newCtx
+}
+
 func okHandler(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
+	Log(ctx)
 	fmt.Fprintf(rw, "OK: called '%s'", ctx.Value("path"))
 }
 
@@ -29,6 +38,9 @@ func TestMain(t *testing.T) {
 
 	router := NewRouter()
 	router.SetDebugLevel(DebugLevelTimings)
+
+	testFilter := TestFilter{}
+	router.AddFilter(testFilter)
 
 	// error handlers
 	router.SetErrorHandlerFunc(http.StatusNotFound, errHandler)

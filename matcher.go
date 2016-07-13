@@ -92,23 +92,20 @@ func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
 	for candidate != NoMatchCandidate() {
 		var matches []*Match
 		var catchAllMatches []*Match
-		var errCode int
 		if currentMatches == nil {
-			matches, catchAllMatches, errCode = matchNodesForCandidate(method, candidate, nodesToCheck)
-			Log("++", candidate.part)
-			Log("++", matches)
+			matches, catchAllMatches, _ = matchNodesForCandidate(method, candidate, nodesToCheck)
+			// Log("++", candidate.part)
+			// Log("++", matches)
 		} else {
-			matches, catchAllMatches, errCode = matchCurrentMatchesForCandidate(method, candidate, currentMatches)
-			Log("--", candidate.part)
-			Log("--", matches)
+			matches, catchAllMatches, _ = matchCurrentMatchesForCandidate(method, candidate, currentMatches)
+			// Log("--", candidate.part)
+			// Log("--", matches)
 		}
 		if len(catchAllMatches) > 0 {
 			// append the old catch alls to the new ones so the deeper matches take precedent
 			catchAlls = append(catchAllMatches, catchAlls...)
 		}
-		Log("Err Code:", errCode)
 		if len(matches) == 0 {
-
 			break
 		}
 		currentMatches = matches
