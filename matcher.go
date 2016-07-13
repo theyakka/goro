@@ -18,7 +18,6 @@ import (
 // Matcher is the global matching engine
 type Matcher struct {
 	router       *Router
-	LogDebug     bool
 	LogMatchTime bool
 }
 
@@ -69,16 +68,11 @@ func NewMatcher(router *Router) *Matcher {
 	return &Matcher{
 		router:       router,
 		LogMatchTime: false,
-		LogDebug:     false,
 	}
 }
 
 // MatchPathToRoute attempts to match the given path to a registered Route
 func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
-	if m.LogDebug {
-		fmt.Println("")
-		fmt.Println("")
-	}
 
 	startTime := time.Now()
 	tree := m.router.routes
@@ -101,23 +95,20 @@ func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
 		var errCode int
 		if currentMatches == nil {
 			matches, catchAllMatches, errCode = matchNodesForCandidate(method, candidate, nodesToCheck)
-			if m.LogDebug {
-				Log("++", candidate.part)
-				Log("++", matches)
-			}
+			Log("++", candidate.part)
+			Log("++", matches)
 		} else {
 			matches, catchAllMatches, errCode = matchCurrentMatchesForCandidate(method, candidate, currentMatches)
-			if m.LogDebug {
-				Log("--", candidate.part)
-				Log("--", matches)
-			}
+			Log("--", candidate.part)
+			Log("--", matches)
 		}
 		if len(catchAllMatches) > 0 {
 			// append the old catch alls to the new ones so the deeper matches take precedent
 			catchAlls = append(catchAllMatches, catchAlls...)
 		}
+		Log("Err Code:", errCode)
 		if len(matches) == 0 {
-			Log(errCode)
+
 			break
 		}
 		currentMatches = matches
@@ -129,13 +120,11 @@ func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
 		}
 	}
 
-	if m.LogDebug {
-		fmt.Println("")
-		fmt.Println("")
-		Log("-----")
-		Log("final matches: ", finalMatches)
-		Log("catch alls:    ", catchAlls)
-	}
+	// fmt.Println("")
+	// fmt.Println("")
+	// Log("-----")
+	// Log("final matches: ", finalMatches)
+	// Log("catch alls:    ", catchAlls)
 
 	var matchToUse *Match
 	if len(finalMatches) > 0 {
@@ -144,11 +133,9 @@ func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
 		matchToUse = catchAlls[0]
 	}
 
-	if m.LogDebug {
-		fmt.Println("")
-		Log("-----")
-		Log("final match:   ", matchToUse)
-	}
+	// fmt.Println("")
+	// Log("-----")
+	// Log("final match:   ", matchToUse)
 
 	if m.LogMatchTime {
 		endTime := time.Now()
@@ -186,7 +173,7 @@ func checkNodesForMatches(method string, candidate MatchCandidate, nodes []*Node
 	matchedNodes := []*Match{}
 	catchAllNodes := []*Match{}
 	errCode := 0
-	foundNonMethodMatch := false
+
 	for _, node := range nodes {
 		isWildcard := isWildcardPart(node.part)
 		if (node.nodeType == ComponentTypeFixed && node.part == candidate.part) ||
@@ -195,34 +182,15 @@ func checkNodesForMatches(method string, candidate MatchCandidate, nodes []*Node
 			if isWildcard {
 				match.WildcardValues[node.part[1:len(node.part)]] = candidate.part
 			}
+			matchedNodes = append(matchedNodes, match)
 			if !candidate.HasRemainingCandidates() {
-				node := match.Node
-				route := node.RouteForMethod(method)
-				if route != nil {
-					matchedNodes = append(matchedNodes, match)
-					break // break early, we found a match
-				} else {
-					foundNonMethodMatch = true
-				}
-			} else {
-				matchedNodes = append(matchedNodes, match)
+				break // break early, we found a match
 			}
 		} else if isCatchAllPart(node.part) {
-			route := node.RouteForMethod(method)
-			if route != nil {
-				match := NewMatchWithParent(node, parentMatch)
-				match.CatchAllValue = candidate.currentPath
-				catchAllNodes = append(catchAllNodes, match)
-			} else {
-				foundNonMethodMatch = true
-			}
+			match := NewMatchWithParent(node, parentMatch)
+			match.CatchAllValue = candidate.currentPath
+			catchAllNodes = append(catchAllNodes, match)
 		}
-	}
-
-	Log(len(matchedNodes))
-	if foundNonMethodMatch && len(matchedNodes) == 1 {
-		Log("Method Not Allowed error")
-		errCode = 405
 	}
 
 	return matchedNodes, catchAllNodes, errCode

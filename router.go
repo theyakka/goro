@@ -41,8 +41,8 @@ type Router struct {
 
 	globalHandlers map[string]ContextHandler
 
-	// debugMode - if enabled will output debugging information
-	debugMode bool
+	// debugLevel - if enabled will output debugging information
+	debugLevel DebugLevel
 }
 
 // NewRouter - creates a new default instance of the Router type
@@ -52,7 +52,7 @@ func NewRouter() *Router {
 		variables:      map[string]string{},
 		routes:         &Tree{},
 		globalHandlers: map[string]ContextHandler{},
-		debugMode:      false,
+		debugLevel:     DebugLevelNone,
 		cache:          NewRouteCache(),
 		errorHandlers:  map[int]ContextHandler{},
 		ErrorHandler:   nil,
@@ -61,16 +61,18 @@ func NewRouter() *Router {
 	return router
 }
 
-// EnableDebugMode - enables or disables debug mode
-func (r *Router) EnableDebugMode(enabled bool) {
+// SetDebugLevel - enables or disables debug mode
+func (r *Router) SetDebugLevel(debugLevel DebugLevel) {
+	debugTimingsOn := debugLevel == DebugLevelTimings
+	debugFullOn := debugLevel == DebugLevelFull
+	debugOn := debugTimingsOn || debugFullOn
 	onOffString := "on"
-	if !enabled {
+	if !debugOn {
 		onOffString = "off"
 	}
 	Log("Debug mode is", onOffString)
-	r.debugMode = enabled
-	r.routeMatcher.LogMatchTime = enabled
-	r.routeMatcher.LogDebug = enabled
+	r.debugLevel = debugLevel
+	r.routeMatcher.LogMatchTime = debugOn
 }
 
 // NewMatcher returns a new matcher for the given Router
@@ -164,10 +166,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	matchError := ""
 	matchErrorCode := 0
 	match := r.routeMatcher.MatchPathToRoute(method, usePath)
-	if match != nil {
+	if match != nil && len(match.Node.routes) > 0 {
 		Log("Match:", match)
-		// TODO - error checking
-		route := match.Node.routes[method]
+		route := match.Node.RouteForMethod(method)
 		if route != nil {
 			handler := route.Handler
 			if handler != nil {

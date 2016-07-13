@@ -57,6 +57,18 @@ const (
 	HTTPMethodDELETE string = "DELETE"
 )
 
+// DebugLevel - debug information output level
+type DebugLevel int
+
+const (
+	// DebugLevelNone - debugging is off
+	DebugLevelNone DebugLevel = 1 << iota
+	// DebugLevelTimings - show timings only
+	DebugLevelTimings
+	// DebugLevelFull - show all debugging information
+	DebugLevelFull
+)
+
 // initLogger - initializes the shared logger instance
 func initLogger() {
 	logger = log.New(os.Stdout, "GORO: ", log.Ldate|log.Ltime|log.Lshortfile)

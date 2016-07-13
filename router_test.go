@@ -16,13 +16,8 @@ import (
 	"testing"
 )
 
-func rootHandler(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
-	Log("root")
-}
-
-func testThisThing(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
-	Log("HERE!!!")
-	Log("ctx:", ctx.Value("path"))
+func okHandler(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
+	fmt.Fprintf(rw, "OK: called '%s'", ctx.Value("path"))
 }
 
 func errHandler(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
@@ -33,18 +28,22 @@ func errHandler(ctx context.Context, rw http.ResponseWriter, req *http.Request) 
 func TestMain(t *testing.T) {
 
 	router := NewRouter()
-	router.EnableDebugMode(true)
+	router.SetDebugLevel(DebugLevelTimings)
 
 	// error handlers
 	router.SetErrorHandlerFunc(http.StatusNotFound, errHandler)
 	router.SetErrorHandlerFunc(http.StatusMethodNotAllowed, errHandler)
 
-	router.Add("GET", "/").HandleFunc(rootHandler).Describe("The root route")
-	// router.Add("GET", "/users/$idval/:action")
-	router.Add("GET", "/users/:id/*")
-	router.Add("GET", "/users/:id/show")
-	router.Add("GET", "/users/:id/:action")
-	router.Add("GET", "/users/:id/show/:what")
+	router.Add("GET", "/").
+		HandleFunc(okHandler).Describe("The root route")
+	router.Add("GET", "/users/:id/*").
+		HandleFunc(okHandler)
+	router.Add("GET", "/users/:id/show").
+		HandleFunc(okHandler)
+	router.Add("GET", "/users/:id/:action").
+		HandleFunc(okHandler)
+	router.Add("GET", "/users/:id/show/:what").
+		HandleFunc(okHandler)
 
 	// router.PrintTreeInfo()
 
