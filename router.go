@@ -19,8 +19,11 @@ import (
 
 // Router is the main routing class
 type Router struct {
-	// NotFoundHandler - called when no route was matched
-	NotFoundHandler ContextHandler
+	// errorHandlers - map status codes to specific handlers
+	errorHandlers map[int]ContextHandler
+
+	// ErrorHandler - generic error handler
+	ErrorHandler ContextHandler
 
 	// globalContext is the global Context object
 	globalContext context.Context
@@ -33,6 +36,8 @@ type Router struct {
 
 	// methodKeyedRoutes - all routes registered with the router
 	routes *Tree
+
+	cache *RouteCache
 
 	globalHandlers map[string]ContextHandler
 
@@ -48,6 +53,9 @@ func NewRouter() *Router {
 		routes:         &Tree{},
 		globalHandlers: map[string]ContextHandler{},
 		debugMode:      false,
+		cache:          NewRouteCache(),
+		errorHandlers:  map[int]ContextHandler{},
+		ErrorHandler:   nil,
 	}
 	router.routeMatcher = NewMatcher(router)
 	return router
@@ -62,6 +70,7 @@ func (r *Router) EnableDebugMode(enabled bool) {
 	Log("Debug mode is", onOffString)
 	r.debugMode = enabled
 	r.routeMatcher.LogMatchTime = enabled
+	r.routeMatcher.LogDebug = enabled
 }
 
 // NewMatcher returns a new matcher for the given Router
@@ -89,6 +98,16 @@ func (r *Router) SetGlobalHandler(method string, handler ContextHandler) {
 // SetGlobalHandlerFunc configures a ContextHandlerFunc to handle all requests for a given method
 func (r *Router) SetGlobalHandlerFunc(method string, handlerFunc ContextHandlerFunc) {
 	r.SetGlobalHandler(method, ContextHandler(handlerFunc))
+}
+
+// SetErrorHandler configures a ContextHandler to handle all errors for the supplied status code
+func (r *Router) SetErrorHandler(statusCode int, handler ContextHandler) {
+	r.errorHandlers[statusCode] = handler
+}
+
+// SetErrorHandlerFunc configures a ContextHandlerFunc to handle all errors for the supplied status code
+func (r *Router) SetErrorHandlerFunc(statusCode int, handler ContextHandlerFunc) {
+	r.SetErrorHandler(statusCode, ContextHandler(handler))
 }
 
 // AddStringVariable adds a string variable value for substitution
@@ -125,6 +144,7 @@ func printSubNodes(node *Node, level int) {
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+
 	useReq := req
 	usePath := strings.ToLower(useReq.URL.Path) // always compare lower
 	usePath = filepath.Clean(usePath)
@@ -164,15 +184,21 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if matchErrorCode != 0 {
-		// not found error
-		if matchErrorCode == http.StatusNotFound {
-			if r.NotFoundHandler != nil {
-				r.NotFoundHandler.ServeHTTPContext(outCtx, w, req)
-				return
-			}
+		err := map[string]interface{}{
+			"code":    matchErrorCode,
+			"message": matchError,
 		}
-		// method not allowed
-		if matchErrorCode == http.StatusMethodNotAllowed {
+		errCtx := context.WithValue(outCtx, "error", err)
+
+		// try to call specific error handler
+		errHandler := r.errorHandlers[matchErrorCode]
+		if errHandler != nil {
+			errHandler.ServeHTTPContext(errCtx, w, req)
+			return
+		}
+		// if generic error handler defined, call that
+		if r.ErrorHandler != nil {
+			r.ErrorHandler.ServeHTTPContext(errCtx, w, req)
 			return
 		}
 		// return a generic http error

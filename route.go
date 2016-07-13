@@ -29,7 +29,6 @@ type Route struct {
 	Handler    ContextHandler
 	Meta       map[string]interface{}
 	Info       map[string]interface{}
-	Nodes      *[]Node
 }
 
 // NewRoute creates a new Route instance
