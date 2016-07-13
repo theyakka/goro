@@ -43,8 +43,8 @@ func TestMain(t *testing.T) {
 	router.AddFilter(testFilter)
 
 	// error handlers
-	router.SetErrorHandlerFunc(http.StatusNotFound, errHandler)
-	router.SetErrorHandlerFunc(http.StatusMethodNotAllowed, errHandler)
+	// router.SetErrorHandlerFunc(http.StatusNotFound, errHandler)
+	// router.SetErrorHandlerFunc(http.StatusMethodNotAllowed, errHandler)
 
 	router.Add("GET", "/").
 		HandleFunc(okHandler).Describe("The root route")

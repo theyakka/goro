@@ -19,29 +19,38 @@ import (
 
 // Router is the main routing class
 type Router struct {
-	// errorHandlers - map status codes to specific handlers
-	errorHandlers map[int]ContextHandler
-
-	filters []Filter
 
 	// ErrorHandler - generic error handler
 	ErrorHandler ContextHandler
 
+	// ShouldCacheMatchedRoutes - if true then any matched routes should be cached
+	// according to the path they were matched to
+	ShouldCacheMatchedRoutes bool
+
 	// globalContext is the global Context object
 	globalContext context.Context
+
+	// errorHandlers - map status codes to specific handlers
+	errorHandlers map[int]ContextHandler
+
+	// globalHandlers - handlers that will match all requests for an HTTP method regardless
+	// of route matching
+	globalHandlers map[string]ContextHandler
+
+	// filters - registered pre-process filters
+	filters []Filter
 
 	// routeMatcher - the primary route matcher instance
 	routeMatcher *Matcher
 
-	// variables - unwrapped (clean) variables that have been defined
-	variables map[string]string
-
 	// methodKeyedRoutes - all routes registered with the router
 	routes *Tree
 
-	cache *RouteCache
+	// variables - unwrapped (clean) variables that have been defined
+	variables map[string]string
 
-	globalHandlers map[string]ContextHandler
+	// cache - matched routes to path mappings
+	cache *RouteCache
 
 	// debugLevel - if enabled will output debugging information
 	debugLevel DebugLevel
@@ -50,15 +59,16 @@ type Router struct {
 // NewRouter - creates a new default instance of the Router type
 func NewRouter() *Router {
 	router := &Router{
-		globalContext:  context.Background(),
-		variables:      map[string]string{},
-		routes:         &Tree{},
-		globalHandlers: map[string]ContextHandler{},
-		debugLevel:     DebugLevelNone,
-		cache:          NewRouteCache(),
-		errorHandlers:  map[int]ContextHandler{},
-		ErrorHandler:   nil,
-		filters:        nil,
+		ErrorHandler:             nil,
+		ShouldCacheMatchedRoutes: true,
+		globalContext:            context.Background(),
+		errorHandlers:            map[int]ContextHandler{},
+		globalHandlers:           map[string]ContextHandler{},
+		filters:                  nil,
+		routes:                   &Tree{},
+		variables:                map[string]string{},
+		cache:                    NewRouteCache(),
+		debugLevel:               DebugLevelNone,
 	}
 	router.routeMatcher = NewMatcher(router)
 	return router
@@ -115,6 +125,7 @@ func (r *Router) SetErrorHandlerFunc(statusCode int, handler ContextHandlerFunc)
 	r.SetErrorHandler(statusCode, ContextHandler(handler))
 }
 
+// AddFilter adds a filter to the list of pre-process filters
 func (r *Router) AddFilter(filter Filter) {
 	r.filters = append(r.filters, filter)
 }
@@ -170,12 +181,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	Log(outCtx)
-
 	// check to see if a global handler has been registered for the method
 	globalHandler := r.globalHandlers[method]
 	if globalHandler != nil {
-		Log("should handle", method, "globally")
 		globalHandler.ServeHTTPContext(outCtx, w, req)
 		return
 	}
