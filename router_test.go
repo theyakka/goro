@@ -25,12 +25,10 @@ func (tf TestFilter) ExecuteFilter(ctx context.Context, req *http.Request) conte
 }
 
 func okHandler(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
-	Log(ctx)
-	fmt.Fprintf(rw, "OK: called '%s'", ctx.Value("path"))
+	fmt.Fprintf(rw, "OK: called '%s' -> %s", ctx.Value("path"), req.Method)
 }
 
 func errHandler(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
-	Log(ctx)
 	fmt.Fprint(rw, "error")
 }
 
@@ -52,13 +50,16 @@ func TestMain(t *testing.T) {
 		HandleFunc(okHandler)
 	router.Add("GET", "/users/:id/show").
 		HandleFunc(okHandler)
+	router.Add("POST", "/users/:id/show").
+		HandleFunc(okHandler).Describe("POST form of the route")
 	router.Add("GET", "/users/:id/:action").
 		HandleFunc(okHandler)
 	router.Add("GET", "/users/:id/show/:what").
 		HandleFunc(okHandler)
 
-	// router.PrintTreeInfo()
+	router.PrintRoutes()
 
 	Log("Server running on :8080")
+	fmt.Println("")
 	http.ListenAndServe(":8080", router)
 }

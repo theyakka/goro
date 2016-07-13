@@ -139,30 +139,6 @@ func (r *Router) AddStringVariable(variable string, value string) {
 	r.variables[varname] = value
 }
 
-// PrintTreeInfo prints debugging information about all registered Routes
-func (r *Router) PrintTreeInfo() {
-	for _, node := range r.routes.nodes {
-		fmt.Println(" - ", node)
-		printSubNodes(node, 0)
-	}
-}
-
-func printSubNodes(node *Node, level int) {
-	if node.HasChildren() {
-		for _, subnode := range node.nodes {
-			indent := ""
-			for i := 0; i < level+1; i++ {
-				indent += " "
-			}
-			indent += "-"
-			fmt.Println("", indent, " ", subnode)
-			if subnode.HasChildren() {
-				printSubNodes(subnode, level+1)
-			}
-		}
-	}
-}
-
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	useReq := req
@@ -218,17 +194,17 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			"code":    matchErrorCode,
 			"message": matchError,
 		}
-		errCtx := context.WithValue(outCtx, "error", err)
+		outCtx = context.WithValue(outCtx, "error", err)
 
 		// try to call specific error handler
 		errHandler := r.errorHandlers[matchErrorCode]
 		if errHandler != nil {
-			errHandler.ServeHTTPContext(errCtx, w, req)
+			errHandler.ServeHTTPContext(outCtx, w, req)
 			return
 		}
 		// if generic error handler defined, call that
 		if r.ErrorHandler != nil {
-			r.ErrorHandler.ServeHTTPContext(errCtx, w, req)
+			r.ErrorHandler.ServeHTTPContext(outCtx, w, req)
 			return
 		}
 		// return a generic http error
@@ -238,4 +214,60 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 func errorHandler(w http.ResponseWriter, req *http.Request, errorString string, errorCode int) {
 	http.Error(w, errorString, errorCode)
+}
+
+// PrintTreeInfo prints debugging information about all registered Routes
+func (r *Router) PrintTreeInfo() {
+	for _, node := range r.routes.nodes {
+		fmt.Println(" - ", node)
+		printSubNodes(node, 0)
+	}
+}
+
+// PrintRoutes prints route registration information
+func (r *Router) PrintRoutes() {
+	fmt.Println("")
+	nodes := r.routes.nodes
+	for _, node := range nodes {
+		for _, route := range node.routes {
+			printRouteDebugInfo(route)
+		}
+		printSubRoutes(node)
+	}
+	fmt.Println("")
+}
+
+func printSubRoutes(node *Node) {
+	if node.HasChildren() {
+		for _, node := range node.nodes {
+			for _, route := range node.routes {
+				printRouteDebugInfo(route)
+			}
+			printSubRoutes(node)
+		}
+	}
+}
+
+func printRouteDebugInfo(route *Route) {
+	desc := route.Info[RouteInfoKeyDescription]
+	if desc == nil {
+		desc = ""
+	}
+	fmt.Printf("%9s   %-50s %s\n", route.Method, route.PathFormat, desc)
+}
+
+func printSubNodes(node *Node, level int) {
+	if node.HasChildren() {
+		for _, subnode := range node.nodes {
+			indent := ""
+			for i := 0; i < level+1; i++ {
+				indent += " "
+			}
+			indent += "-"
+			fmt.Println("", indent, " ", subnode)
+			if subnode.HasChildren() {
+				printSubNodes(subnode, level+1)
+			}
+		}
+	}
 }
