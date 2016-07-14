@@ -269,11 +269,8 @@ func (r *Router) shouldServeStaticFile(w http.ResponseWriter, req *http.Request,
 				if !strings.HasSuffix(fullPrefix, "/") {
 					fullPrefix = fullPrefix + "/"
 				}
-
 				if strings.HasPrefix(seekPath, fullPrefix) {
 					seekPath = strings.TrimLeft(seekPath, fullPrefix)
-				} else {
-					return false, ""
 				}
 			}
 			filename := filepath.Join(staticDir.root, seekPath)
