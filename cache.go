@@ -14,6 +14,9 @@ import (
 	"sync"
 )
 
+// type RouteCache interface {
+// }
+
 // RouteCache - temporary storage for routes
 type RouteCache struct {
 	// mutex - locking

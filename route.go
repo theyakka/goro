@@ -10,6 +10,7 @@
 package goro
 
 import (
+	"net/http"
 	"strings"
 )
 
@@ -26,7 +27,7 @@ type Route struct {
 	Method     string
 	Path       string
 	PathFormat string
-	Handler    ContextHandler
+	Handler    http.Handler
 	Meta       map[string]interface{}
 	Info       map[string]interface{}
 }
@@ -57,14 +58,14 @@ func NewRouteWithMeta(method string, path string, meta map[string]interface{}) *
 }
 
 // Handle adds a ContextHandler to the Route
-func (rte *Route) Handle(handler ContextHandler) *Route {
+func (rte *Route) Handle(handler http.Handler) *Route {
 	rte.Handler = handler
 	return rte
 }
 
 // HandleFunc adds a wrapped ContextHandlerFunc (to ContextHandler) to the Route
-func (rte *Route) HandleFunc(handlerFunc ContextHandlerFunc) *Route {
-	rte.Handler = ContextHandlerFunc(handlerFunc)
+func (rte *Route) HandleFunc(handlerFunc http.HandlerFunc) *Route {
+	rte.Handler = http.Handler(handlerFunc)
 	return rte
 }
 

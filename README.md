@@ -6,6 +6,10 @@
 Goro is a mighty fine routing toolkit for Go web applications. It is designed to
 be fast, yet flexible.
 
+# Installing
+
+
+
 # Getting started
 
 The basic code breakdown looks something like this:

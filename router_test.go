@@ -19,16 +19,18 @@ import (
 type TestFilter struct {
 }
 
-func (tf TestFilter) ExecuteFilter(ctx context.Context, req *http.Request) context.Context {
-	newCtx := context.WithValue(ctx, "TESTING!!!", "this is a test")
-	return newCtx
+func (tf TestFilter) ExecuteFilter(req **http.Request) {
+	oldReq := *req
+	newCtx := context.WithValue(oldReq.Context(), "TESTVAL", "this is a test")
+	*req = oldReq.WithContext(newCtx)
 }
 
-func okHandler(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
+func okHandler(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
 	fmt.Fprintf(rw, "OK: called '%s' -> %s", ctx.Value("path"), req.Method)
 }
 
-func errHandler(ctx context.Context, rw http.ResponseWriter, req *http.Request) {
+func errHandler(rw http.ResponseWriter, req *http.Request) {
 	fmt.Fprint(rw, "error")
 }
 

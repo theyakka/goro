@@ -21,21 +21,18 @@ import (
 type Router struct {
 
 	// ErrorHandler - generic error handler
-	ErrorHandler ContextHandler
+	ErrorHandler http.Handler
 
 	// ShouldCacheMatchedRoutes - if true then any matched routes should be cached
 	// according to the path they were matched to
 	ShouldCacheMatchedRoutes bool
 
-	// globalContext is the global Context object
-	globalContext context.Context
-
 	// errorHandlers - map status codes to specific handlers
-	errorHandlers map[int]ContextHandler
+	errorHandlers map[int]http.Handler
 
 	// globalHandlers - handlers that will match all requests for an HTTP method regardless
 	// of route matching
-	globalHandlers map[string]ContextHandler
+	globalHandlers map[string]http.Handler
 
 	// filters - registered pre-process filters
 	filters []Filter
@@ -61,9 +58,8 @@ func NewRouter() *Router {
 	router := &Router{
 		ErrorHandler:             nil,
 		ShouldCacheMatchedRoutes: true,
-		globalContext:            context.Background(),
-		errorHandlers:            map[int]ContextHandler{},
-		globalHandlers:           map[string]ContextHandler{},
+		errorHandlers:            map[int]http.Handler{},
+		globalHandlers:           map[string]http.Handler{},
 		filters:                  nil,
 		routes:                   &Tree{},
 		variables:                map[string]string{},
@@ -106,23 +102,23 @@ func (r *Router) Use(route *Route) *Route {
 }
 
 // SetGlobalHandler configures a ContextHandler to handle all requests for a given method
-func (r *Router) SetGlobalHandler(method string, handler ContextHandler) {
+func (r *Router) SetGlobalHandler(method string, handler http.Handler) {
 	r.globalHandlers[strings.ToUpper(method)] = handler
 }
 
 // SetGlobalHandlerFunc configures a ContextHandlerFunc to handle all requests for a given method
-func (r *Router) SetGlobalHandlerFunc(method string, handlerFunc ContextHandlerFunc) {
-	r.SetGlobalHandler(method, ContextHandler(handlerFunc))
+func (r *Router) SetGlobalHandlerFunc(method string, handlerFunc http.HandlerFunc) {
+	r.SetGlobalHandler(method, http.Handler(handlerFunc))
 }
 
 // SetErrorHandler configures a ContextHandler to handle all errors for the supplied status code
-func (r *Router) SetErrorHandler(statusCode int, handler ContextHandler) {
+func (r *Router) SetErrorHandler(statusCode int, handler http.Handler) {
 	r.errorHandlers[statusCode] = handler
 }
 
 // SetErrorHandlerFunc configures a ContextHandlerFunc to handle all errors for the supplied status code
-func (r *Router) SetErrorHandlerFunc(statusCode int, handler ContextHandlerFunc) {
-	r.SetErrorHandler(statusCode, ContextHandler(handler))
+func (r *Router) SetErrorHandlerFunc(statusCode int, handler http.HandlerFunc) {
+	r.SetErrorHandler(statusCode, http.Handler(handler))
 }
 
 // AddFilter adds a filter to the list of pre-process filters
@@ -146,21 +142,25 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	usePath = filepath.Clean(usePath)
 	method := strings.ToUpper(req.Method)
 
-	outCtx := context.WithValue(r.globalContext, "path", usePath)
+	initialContext := req.Context()
+	if initialContext == nil {
+		initialContext = context.Background()
+	}
+	outCtx := context.WithValue(initialContext, "path", usePath)
 
 	if r.filters != nil {
 		for _, filter := range r.filters {
-			updatedCtx := filter.ExecuteFilter(outCtx, req)
-			if updatedCtx != nil {
-				outCtx = updatedCtx
-			}
+			originalReq := req.WithContext(outCtx)
+			filter.ExecuteFilter(&originalReq)
+			req = originalReq
+			outCtx = req.Context() // update the working context so we can pass it along
 		}
 	}
 
 	// check to see if a global handler has been registered for the method
 	globalHandler := r.globalHandlers[method]
 	if globalHandler != nil {
-		globalHandler.ServeHTTPContext(outCtx, w, req)
+		globalHandler.ServeHTTP(w, req.WithContext(outCtx))
 		return
 	}
 
@@ -177,7 +177,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				if match.CatchAllValue != "" {
 					outCtx = context.WithValue(outCtx, "catchAll", match.CatchAllValue)
 				}
-				handler.ServeHTTPContext(outCtx, w, req)
+				handler.ServeHTTP(w, req.WithContext(outCtx))
 				return
 			}
 		} else {
@@ -199,12 +199,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// try to call specific error handler
 		errHandler := r.errorHandlers[matchErrorCode]
 		if errHandler != nil {
-			errHandler.ServeHTTPContext(outCtx, w, req)
+			errHandler.ServeHTTP(w, req.WithContext(outCtx))
 			return
 		}
 		// if generic error handler defined, call that
 		if r.ErrorHandler != nil {
-			r.ErrorHandler.ServeHTTPContext(outCtx, w, req)
+			r.ErrorHandler.ServeHTTP(w, req.WithContext(outCtx))
 			return
 		}
 		// return a generic http error
