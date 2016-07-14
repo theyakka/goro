@@ -36,11 +36,14 @@ func errHandler(rw http.ResponseWriter, req *http.Request) {
 
 func TestMain(t *testing.T) {
 
-	router := NewRouter()
+	domains := NewDomainMap()
+	router := domains.NewRouter("^(?:www+[.])*(localhost.local)(?::\\d+)?")
 	router.SetDebugLevel(DebugLevelTimings)
 
 	testFilter := TestFilter{}
 	router.AddFilter(testFilter)
+
+	router.AddStatic("./assets")
 
 	// error handlers
 	// router.SetErrorHandlerFunc(http.StatusNotFound, errHandler)
@@ -58,10 +61,12 @@ func TestMain(t *testing.T) {
 		HandleFunc(okHandler)
 	router.Add("GET", "/users/:id/show/:what").
 		HandleFunc(okHandler)
+	router.Add("GET", "/*").
+		HandleFunc(okHandler)
 
 	router.PrintRoutes()
 
 	Log("Server running on :8080")
 	fmt.Println("")
-	http.ListenAndServe(":8080", router)
+	http.ListenAndServe(":8080", domains)
 }

@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -27,12 +28,17 @@ type Router struct {
 	// according to the path they were matched to
 	ShouldCacheMatchedRoutes bool
 
+	// BeforeChain - a Chain of handlers that will always be executed before the Route handler
+	BeforeChain Chain
+
 	// errorHandlers - map status codes to specific handlers
 	errorHandlers map[int]http.Handler
 
 	// globalHandlers - handlers that will match all requests for an HTTP method regardless
 	// of route matching
 	globalHandlers map[string]http.Handler
+
+	staticLocations []string
 
 	// filters - registered pre-process filters
 	filters []Filter
@@ -60,6 +66,7 @@ func NewRouter() *Router {
 		ShouldCacheMatchedRoutes: true,
 		errorHandlers:            map[int]http.Handler{},
 		globalHandlers:           map[string]http.Handler{},
+		staticLocations:          []string{},
 		filters:                  nil,
 		routes:                   &Tree{},
 		variables:                map[string]string{},
@@ -99,6 +106,11 @@ func (r *Router) Add(method string, path string) *Route {
 func (r *Router) Use(route *Route) *Route {
 	r.routes.AddRouteToTree(route, r.variables)
 	return route
+}
+
+// AddStatic registers a directory to serve static files
+func (r *Router) AddStatic(staticRoot string) {
+	r.staticLocations = append(r.staticLocations, staticRoot)
 }
 
 // SetGlobalHandler configures a ContextHandler to handle all requests for a given method
@@ -171,6 +183,15 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if match != nil && len(match.Node.routes) > 0 {
 		route := match.Node.RouteForMethod(method)
 		if route != nil {
+			if match.Node.nodeType == ComponentTypeCatchAll {
+				// check to see if we should serve a static file at that location before falling
+				// through to the catch all
+				fileExists, filename := r.shouldServeStaticFile(w, req, usePath)
+				if fileExists {
+					http.ServeFile(w, req, filename)
+					return
+				}
+			}
 			handler := route.Handler
 			if handler != nil {
 				outCtx = context.WithValue(outCtx, "params", match.WildcardValues)
@@ -185,6 +206,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			matchErrorCode = http.StatusMethodNotAllowed
 		}
 	} else {
+		fileExists, filename := r.shouldServeStaticFile(w, req, usePath)
+		if fileExists {
+			http.ServeFile(w, req, filename)
+			return
+		}
 		matchError = "Not Found"
 		matchErrorCode = http.StatusNotFound
 	}
@@ -210,6 +236,19 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// return a generic http error
 		errorHandler(w, req, matchError, matchErrorCode)
 	}
+}
+
+func (r *Router) shouldServeStaticFile(w http.ResponseWriter, req *http.Request, path string) (fileExists bool, filePath string) {
+	if r.staticLocations != nil && len(r.staticLocations) > 0 {
+		for _, staticDir := range r.staticLocations {
+			filename := filepath.Join(staticDir, path)
+			_, statErr := os.Stat(filename)
+			if statErr == nil {
+				return true, filename
+			}
+		}
+	}
+	return false, ""
 }
 
 func errorHandler(w http.ResponseWriter, req *http.Request, errorString string, errorCode int) {
