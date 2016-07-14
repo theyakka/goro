@@ -43,7 +43,7 @@ func TestMain(t *testing.T) {
 	testFilter := TestFilter{}
 	router.AddFilter(testFilter)
 
-	router.AddStatic("./assets")
+	router.AddStaticWithPrefix("./assets", "assets/monkey")
 
 	// error handlers
 	// router.SetErrorHandlerFunc(http.StatusNotFound, errHandler)

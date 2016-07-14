@@ -18,6 +18,15 @@ import (
 	"strings"
 )
 
+// StaticLocation is a holder for static location information
+type StaticLocation struct {
+	// root is the root (source) location
+	root string
+
+	// prefix is a path prefix to applied when matching
+	prefix string
+}
+
 // Router is the main routing class
 type Router struct {
 
@@ -38,7 +47,7 @@ type Router struct {
 	// of route matching
 	globalHandlers map[string]http.Handler
 
-	staticLocations []string
+	staticLocations []StaticLocation
 
 	// filters - registered pre-process filters
 	filters []Filter
@@ -66,7 +75,7 @@ func NewRouter() *Router {
 		ShouldCacheMatchedRoutes: true,
 		errorHandlers:            map[int]http.Handler{},
 		globalHandlers:           map[string]http.Handler{},
-		staticLocations:          []string{},
+		staticLocations:          []StaticLocation{},
 		filters:                  nil,
 		routes:                   &Tree{},
 		variables:                map[string]string{},
@@ -110,7 +119,17 @@ func (r *Router) Use(route *Route) *Route {
 
 // AddStatic registers a directory to serve static files
 func (r *Router) AddStatic(staticRoot string) {
-	r.staticLocations = append(r.staticLocations, staticRoot)
+	r.AddStaticWithPrefix(staticRoot, "")
+}
+
+// AddStaticWithPrefix registers a directory to serve static files. prefix value
+// will be added at matching
+func (r *Router) AddStaticWithPrefix(staticRoot string, prefix string) {
+	staticLocation := StaticLocation{
+		root:   staticRoot,
+		prefix: prefix,
+	}
+	r.staticLocations = append(r.staticLocations, staticLocation)
 }
 
 // SetGlobalHandler configures a ContextHandler to handle all requests for a given method
@@ -241,7 +260,23 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 func (r *Router) shouldServeStaticFile(w http.ResponseWriter, req *http.Request, path string) (fileExists bool, filePath string) {
 	if r.staticLocations != nil && len(r.staticLocations) > 0 {
 		for _, staticDir := range r.staticLocations {
-			filename := filepath.Join(staticDir, path)
+			seekPath := path
+			if staticDir.prefix != "" {
+				fullPrefix := staticDir.prefix
+				if !strings.HasPrefix(fullPrefix, "/") {
+					fullPrefix = "/" + fullPrefix
+				}
+				if !strings.HasSuffix(fullPrefix, "/") {
+					fullPrefix = fullPrefix + "/"
+				}
+
+				if strings.HasPrefix(seekPath, fullPrefix) {
+					seekPath = strings.TrimLeft(seekPath, fullPrefix)
+				} else {
+					return false, ""
+				}
+			}
+			filename := filepath.Join(staticDir.root, seekPath)
 			_, statErr := os.Stat(filename)
 			if statErr == nil {
 				return true, filename
