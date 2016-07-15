@@ -50,7 +50,7 @@ func NewRouteWithMeta(method string, path string, meta map[string]interface{}) *
 		Meta:       routeMeta,
 	}
 	info := map[string]interface{}{}
-	if path == "/" {
+	if path == RootPath {
 		info[RouteInfoKeyIsRoot] = true
 	}
 	route.Info = info

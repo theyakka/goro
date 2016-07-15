@@ -18,6 +18,9 @@ import (
 // logger - shared logger instance
 var logger *log.Logger
 
+// RootPath - string representation of the root path
+const RootPath = "/"
+
 // RouteComponentType - route component types
 // NOTE: variables will be stripped out / replaced so we dont track them
 type RouteComponentType int

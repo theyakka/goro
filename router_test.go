@@ -19,6 +19,18 @@ import (
 type TestFilter struct {
 }
 
+func testHandler1(rw http.ResponseWriter, req *http.Request) {
+	Log("Test1")
+}
+
+func testHandler2(rw http.ResponseWriter, req *http.Request) {
+	Log("Test2")
+}
+
+func testHandler3(rw http.ResponseWriter, req *http.Request) {
+	Log("Test3")
+}
+
 func (tf TestFilter) ExecuteFilter(req **http.Request) {
 	oldReq := *req
 	newCtx := context.WithValue(oldReq.Context(), "TESTVAL", "this is a test")
@@ -27,6 +39,7 @@ func (tf TestFilter) ExecuteFilter(req **http.Request) {
 
 func okHandler(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
+	Log("OK!")
 	fmt.Fprintf(rw, "OK: called '%s' -> %s", ctx.Value("path"), req.Method)
 }
 
@@ -43,7 +56,11 @@ func TestMain(t *testing.T) {
 	testFilter := TestFilter{}
 	router.AddFilter(testFilter)
 
-	router.AddStaticWithPrefix("./assets", "assets/monkey")
+	router.AddStaticWithPrefix("./assets", "assets")
+	router.AddStaticWithPrefix("./test", "test")
+
+	chain := NewChain()
+	chain.AddFunc(testHandler1, testHandler3, testHandler2)
 
 	// error handlers
 	// router.SetErrorHandlerFunc(http.StatusNotFound, errHandler)
@@ -54,7 +71,7 @@ func TestMain(t *testing.T) {
 	router.Add("GET", "/users/:id/*").
 		HandleFunc(okHandler)
 	router.Add("GET", "/users/:id/show").
-		HandleFunc(okHandler)
+		Handle(chain.ThenFunc(okHandler))
 	router.Add("POST", "/users/:id/show").
 		HandleFunc(okHandler).Describe("POST form of the route")
 	router.Add("GET", "/users/:id/:action").

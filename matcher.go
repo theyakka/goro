@@ -83,8 +83,8 @@ func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
 	nodesToCheck := tree.nodes
 	var currentMatches []*Match
 	candidate := NewMatchCandidate(path)
-	if path == "/" {
-		candidate.part = "/"
+	if path == RootPath {
+		candidate.part = RootPath
 	}
 	finalMatches := []*Match{}
 	catchAlls := []*Match{}

@@ -8,7 +8,20 @@ be fast, yet flexible.
 
 # Installing
 
+**Goro requires Go 1.7+.** Goro requires the new `Context` functionality of the Go `1.7`
+standard library. Its an inconvenience but its a great base for the future.
 
+To install, run:
+
+```
+go get -u github.com/goposse/goro
+```
+
+You can then import goro using:
+
+```
+import github.com/goposse/goro
+```
 
 # Getting started
 
