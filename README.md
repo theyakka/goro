@@ -33,7 +33,8 @@ router.Add("GET", "/").HandleFunc(rootHandler)
 http.ListenAndServe(":8080", router)
 ```
 
-Pretty standard for most routers in Go.
+Pretty standard for most routers in Go. But Goro has so much more going for it. Rather
+than try to describe it all here, you should check out [The Goro Guide](https://github.com/goposse/goro/wiki).
 
 # FAQ
 
