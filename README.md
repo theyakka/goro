@@ -4,6 +4,7 @@
 Goro is a mighty fine routing toolkit for Go web applications. It is designed to
 be fast, yet flexible.
 
+[![Go Version](https://img.shields.io/badge/Go-1.7+-lightgrey.svg)](https://golang.org/)
 [![Build Status](https://travis-ci.org/goposse/goro.svg?branch=master)](https://travis-ci.org/goposse/goro)
 
 # Features
