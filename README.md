@@ -6,6 +6,18 @@
 Goro is a mighty fine routing toolkit for Go web applications. It is designed to
 be fast, yet flexible.
 
+# Features
+
+Goro is LOADED with features, but no bloat.
+
+- Built in `Context` support while maintaining standard Go `http.Handler` interfaces
+- Flexible routing options with *wildcards* and *variables*
+- Prioritized route definitions with caching
+- Handler `Filter`s that allow for pre-execution `Request` or `Context` modification
+- Static asset mapping
+- Support for subdomains
+- Handler chaining built-in
+
 # Installing
 
 **Goro requires Go 1.7+.** Goro requires the new `Context` functionality of the Go `1.7`
