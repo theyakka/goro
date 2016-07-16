@@ -11,6 +11,7 @@ package goro
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -23,18 +24,18 @@ type Matcher struct {
 
 // Match represents a matched node in the tree
 type Match struct {
-	Node           *Node
-	WildcardValues map[string]string
-	CatchAllValue  string
-	ParentMatch    *Match
+	Node          *Node
+	Params        map[string][]string
+	CatchAllValue string
+	ParentMatch   *Match
 }
 
 // NewMatch creates a new Match instance
 func NewMatch(node *Node) *Match {
 	return &Match{
-		Node:           node,
-		WildcardValues: map[string]string{},
-		CatchAllValue:  "",
+		Node:          node,
+		Params:        map[string][]string{},
+		CatchAllValue: "",
 	}
 }
 
@@ -42,16 +43,16 @@ func NewMatch(node *Node) *Match {
 // the parent match
 func NewMatchWithParent(node *Node, parentMatch *Match) *Match {
 	match := &Match{
-		Node:           node,
-		WildcardValues: map[string]string{},
-		CatchAllValue:  "",
+		Node:          node,
+		Params:        map[string][]string{},
+		CatchAllValue: "",
 	}
 	match.ParentMatch = parentMatch
 	if parentMatch != nil {
-		match.WildcardValues = map[string]string{}
+		match.Params = map[string][]string{}
 		// need to copy
-		for key, value := range parentMatch.WildcardValues {
-			match.WildcardValues[key] = value
+		for key, value := range parentMatch.Params {
+			match.Params[key] = value
 		}
 		match.CatchAllValue = parentMatch.CatchAllValue
 	}
@@ -60,7 +61,7 @@ func NewMatchWithParent(node *Node, parentMatch *Match) *Match {
 
 func (match *Match) String() string {
 	return fmt.Sprintf("goro.Match # part=%s, wc=%v, ca=%v",
-		match.Node.part, match.WildcardValues, match.CatchAllValue)
+		match.Node.part, match.Params, match.CatchAllValue)
 }
 
 // NewMatcher creates a new instance of the Matcher
@@ -72,7 +73,7 @@ func NewMatcher(router *Router) *Matcher {
 }
 
 // MatchPathToRoute attempts to match the given path to a registered Route
-func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
+func (m *Matcher) MatchPathToRoute(method string, path string, req *http.Request) *Match {
 
 	startTime := time.Now()
 	tree := m.router.routes
@@ -130,6 +131,19 @@ func (m *Matcher) MatchPathToRoute(method string, path string) *Match {
 		matchToUse = catchAlls[0]
 	}
 
+	// append any query string params to any previously matched params
+	query := req.URL.Query()
+	if query != nil {
+		for k, v := range query {
+			arr := matchToUse.Params[k]
+			if arr == nil {
+				arr = []string{}
+			}
+			arr = append(arr, v...)
+			matchToUse.Params[k] = arr
+		}
+	}
+
 	// fmt.Println("")
 	// Log("-----")
 	// Log("final match:   ", matchToUse)
@@ -177,7 +191,13 @@ func checkNodesForMatches(method string, candidate MatchCandidate, nodes []*Node
 			isWildcard {
 			match := NewMatchWithParent(node, parentMatch)
 			if isWildcard {
-				match.WildcardValues[node.part[1:len(node.part)]] = candidate.part
+				paramKey := node.part[1:len(node.part)]
+				arr := match.Params[paramKey]
+				if arr == nil {
+					arr = []string{}
+				}
+				arr = append(arr, candidate.part)
+				match.Params[paramKey] = arr
 			}
 			matchedNodes = append(matchedNodes, match)
 			if !candidate.HasRemainingCandidates() {

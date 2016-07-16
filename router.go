@@ -198,7 +198,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// check to see if we have a matching route
 	matchError := ""
 	matchErrorCode := 0
-	match := r.routeMatcher.MatchPathToRoute(method, usePath)
+	match := r.routeMatcher.MatchPathToRoute(method, usePath, req)
 	if match != nil && len(match.Node.routes) > 0 {
 		route := match.Node.RouteForMethod(method)
 		if route != nil {
@@ -213,7 +213,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 			handler := route.Handler
 			if handler != nil {
-				outCtx = context.WithValue(outCtx, "params", match.WildcardValues)
+				outCtx = context.WithValue(outCtx, "params", match.Params)
 				if match.CatchAllValue != "" {
 					outCtx = context.WithValue(outCtx, "catchAll", match.CatchAllValue)
 				}

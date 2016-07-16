@@ -13,22 +13,31 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"testing"
 )
+
+type RequestMock struct {
+	URL                string
+	Method             string
+	CheckSuccess       bool
+	CheckParams        bool
+	CheckParamsValue   map[string][]string
+	CheckCatchAll      bool
+	CheckCatchAllValue string
+}
 
 type TestFilter struct {
 }
 
 func testHandler1(rw http.ResponseWriter, req *http.Request) {
-	Log("Test1")
 }
 
 func testHandler2(rw http.ResponseWriter, req *http.Request) {
-	Log("Test2")
 }
 
 func testHandler3(rw http.ResponseWriter, req *http.Request) {
-	Log("Test3")
 }
 
 func (tf TestFilter) ExecuteFilter(req **http.Request) {
@@ -47,6 +56,10 @@ func errHandler(rw http.ResponseWriter, req *http.Request) {
 	fmt.Fprint(rw, "error")
 }
 
+func compareMaps(map1 map[string][]string, map2 map[string][]string) bool {
+	return reflect.DeepEqual(map1, map2)
+}
+
 func TestMain(t *testing.T) {
 
 	domains := NewDomainMap()
@@ -59,31 +72,136 @@ func TestMain(t *testing.T) {
 	router.AddStaticWithPrefix("./assets", "assets")
 	router.AddStaticWithPrefix("./test", "test")
 
+	calledTestHandler := false
+	var finalParams map[string][]string
+	var finalCatchAll string
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		calledTestHandler = true
+		ctx := req.Context()
+		finalParams = ctx.Value("params").(map[string][]string)
+		catchAllObj := ctx.Value("catchAll")
+		finalCatchAll = ""
+		if catchAllObj != nil {
+			finalCatchAll = catchAllObj.(string)
+		}
+
+	})
+
 	chain := NewChain()
 	chain.AddFunc(testHandler1, testHandler3, testHandler2)
 
-	// error handlers
-	// router.SetErrorHandlerFunc(http.StatusNotFound, errHandler)
-	// router.SetErrorHandlerFunc(http.StatusMethodNotAllowed, errHandler)
+	testHandle := chain.ThenFunc(testHandler)
 
 	router.Add("GET", "/").
-		HandleFunc(okHandler).Describe("The root route")
+		Handle(testHandle)
 	router.Add("GET", "/users/:id/*").
-		HandleFunc(okHandler)
+		Handle(testHandle)
 	router.Add("GET", "/users/:id/show").
-		Handle(chain.ThenFunc(okHandler))
+		Handle(testHandle)
 	router.Add("POST", "/users/:id/show").
-		HandleFunc(okHandler).Describe("POST form of the route")
+		Handle(testHandle)
 	router.Add("GET", "/users/:id/:action").
-		HandleFunc(okHandler)
+		Handle(testHandle)
 	router.Add("GET", "/users/:id/show/:what").
-		HandleFunc(okHandler)
+		Handle(testHandle)
 	router.Add("GET", "/*").
-		HandleFunc(okHandler)
+		Handle(testHandle)
 
-	router.PrintRoutes()
+	reqMocks := []RequestMock{
+		RequestMock{Method: "GET", URL: "/", CheckSuccess: true},
+		RequestMock{Method: "POST", URL: "/", CheckSuccess: false},
+		RequestMock{Method: "GET", URL: "/users/123/show", CheckSuccess: true},
+		RequestMock{Method: "GET", URL: "/test/route", CheckSuccess: true},
+		RequestMock{Method: "POST", URL: "/test/route", CheckSuccess: false},
+		RequestMock{Method: "GET", URL: "/users/123/show/something", CheckSuccess: true},
+		RequestMock{Method: "GET", URL: "users/123/show/something", CheckSuccess: true},
+	}
 
-	Log("Server running on :8080")
-	fmt.Println("")
-	http.ListenAndServe(":8080", domains)
+	for _, mock := range reqMocks {
+		r, _ := http.NewRequest(mock.Method, mock.URL, nil)
+		w := httptest.NewRecorder()
+		calledTestHandler = false
+		router.ServeHTTP(w, r)
+		Log("should_pass:", calledTestHandler, " url:", mock.URL, " method:", mock.Method)
+		if calledTestHandler != mock.CheckSuccess {
+			t.Error("Handler check failed")
+		}
+	}
+
+	paramMocks := []RequestMock{
+		RequestMock{
+			Method:       "GET",
+			URL:          "/users/123/show",
+			CheckSuccess: true,
+			CheckParams:  true,
+			CheckParamsValue: map[string][]string{
+				"id": []string{"123"},
+			},
+		},
+		RequestMock{
+			Method:             "GET",
+			URL:                "/test/route",
+			CheckSuccess:       true,
+			CheckCatchAll:      true,
+			CheckCatchAllValue: "test/route",
+		},
+		RequestMock{
+			Method:       "GET",
+			URL:          "/users/123/show/something",
+			CheckSuccess: true,
+			CheckParams:  true,
+			CheckParamsValue: map[string][]string{
+				"id":   []string{"123"},
+				"what": []string{"something"},
+			},
+		},
+		RequestMock{
+			Method:       "GET",
+			URL:          "/users/123/show/something?test=55",
+			CheckSuccess: true,
+			CheckParams:  true,
+			CheckParamsValue: map[string][]string{
+				"id":   []string{"123"},
+				"what": []string{"something"},
+				"test": []string{"55"},
+			},
+		},
+		RequestMock{
+			Method:       "GET",
+			URL:          "/users/123/show/something?what=55",
+			CheckSuccess: true,
+			CheckParams:  true,
+			CheckParamsValue: map[string][]string{
+				"id":   []string{"123"},
+				"what": []string{"something", "55"},
+			},
+		},
+	}
+
+	for _, mock := range paramMocks {
+		r, _ := http.NewRequest(mock.Method, mock.URL, nil)
+		w := httptest.NewRecorder()
+		calledTestHandler = false
+		finalParams = nil
+		finalCatchAll = ""
+		router.ServeHTTP(w, r)
+		Log("should_pass:", calledTestHandler, " url:", mock.URL, " method:", mock.Method)
+		if calledTestHandler != mock.CheckSuccess {
+			t.Error("Handler check failed")
+		} else {
+			Log("params: ", finalParams)
+			Log("catch-all:", finalCatchAll)
+			if mock.CheckCatchAll == true && mock.CheckCatchAllValue != "" {
+				if finalCatchAll != mock.CheckCatchAllValue {
+					t.Error("Catch-all value check failed")
+				}
+			}
+			if mock.CheckParams == true && mock.CheckParamsValue != nil {
+				if !compareMaps(finalParams, mock.CheckParamsValue) {
+					t.Error("Params value check failed")
+				}
+			}
+		}
+	}
+
 }
