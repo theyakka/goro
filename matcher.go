@@ -131,19 +131,6 @@ func (m *Matcher) MatchPathToRoute(method string, path string, req *http.Request
 		matchToUse = catchAlls[0]
 	}
 
-	// append any query string params to any previously matched params
-	query := req.URL.Query()
-	if query != nil {
-		for k, v := range query {
-			arr := matchToUse.Params[k]
-			if arr == nil {
-				arr = []string{}
-			}
-			arr = append(arr, v...)
-			matchToUse.Params[k] = arr
-		}
-	}
-
 	// fmt.Println("")
 	// Log("-----")
 	// Log("final match:   ", matchToUse)
