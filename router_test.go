@@ -163,7 +163,6 @@ func TestMain(t *testing.T) {
 			CheckParamsValue: map[string][]string{
 				"id":   []string{"123"},
 				"what": []string{"something"},
-				"test": []string{"55"},
 			},
 		},
 		RequestMock{
@@ -173,7 +172,7 @@ func TestMain(t *testing.T) {
 			CheckParams:  true,
 			CheckParamsValue: map[string][]string{
 				"id":   []string{"123"},
-				"what": []string{"something", "55"},
+				"what": []string{"something"},
 			},
 		},
 	}
