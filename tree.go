@@ -64,8 +64,12 @@ func (t *Tree) NewNode(part string, parent *Node) *Node {
 // AddRouteToTree splits the route into Nodes and adds them to the tree
 func (t *Tree) AddRouteToTree(route *Route, variables map[string]string) {
 	path := route.PathFormat
-	deslashedPath := path[1:len(path)]
+	deslashedPath := path
+	if strings.HasPrefix(deslashedPath, "/") {
+		deslashedPath = path[1:len(path)]
+	}
 	split := strings.Split(deslashedPath, "/")
+
 	if route.IsRoot() {
 		node := t.NewNode("/", nil)
 		if node.routes == nil {
@@ -73,22 +77,37 @@ func (t *Tree) AddRouteToTree(route *Route, variables map[string]string) {
 		}
 		node.routes[route.Method] = route
 	} else {
+		// check to see if we need to do any variable substitution before parsing
+		// NOTE: does not support nested variables
+		processedSplit := []string{}
+		for _, component := range split {
+			if isVariablePart(component) {
+				variable := variables[component]
+				if variable == "" {
+					// we couldn't substitute the requested variable as there is no value definition
+					panic(fmt.Sprintf("Missing variable substitution for '%s'. route='%s'", component, path))
+					return
+				}
+				deslashedVar := variable
+				if strings.HasPrefix(deslashedVar, "/") {
+					deslashedVar = deslashedVar[1:len(deslashedVar)]
+				}
+				splitVar := strings.Split(deslashedVar, "/")
+				processedSplit = append(processedSplit, splitVar...)
+			} else {
+				processedSplit = append(processedSplit, component)
+			}
+		}
+
+		split = processedSplit
+
 		var parentNode *Node
 		var node *Node
 		for _, component := range split {
-			componentToUse := component
-			// check to see if we need to do any variable substitution before parsing
-			if isVariablePart(component) {
-				componentToUse = variables[component]
-				if componentToUse == "" {
-					// we couldn't substitute the requested variable as there is no value definition
-					panic(fmt.Sprintf("Missing variable substitution for '%s'. route='%s'", component, path))
-				}
-			}
 			// get an existing node for this segment or attach to the tree
-			node = t.nodeForExactPart(componentToUse, parentNode)
+			node = t.nodeForExactPart(component, parentNode)
 			if node == nil {
-				node = t.NewNode(componentToUse, parentNode)
+				node = t.NewNode(component, parentNode)
 			}
 			parentNode = node
 		}
