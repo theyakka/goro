@@ -79,13 +79,10 @@ func (t *Tree) AddRouteToTree(route *Route, variables map[string]string) {
 	} else {
 		// check to see if we need to do any variable substitution before parsing
 		// NOTE: does not support nested variables
-		// fmt.Printf("[SKSEA DEBUG] split: %s\n", split)
 		processedSplit := []string{}
 		for _, component := range split {
 			if isVariablePart(component) {
-
-				variable := resolveVariable(component, variables, path)
-				deslashedVar := variable
+				deslashedVar := resolveVariable(component, variables, path)
 				if strings.HasPrefix(deslashedVar, "/") {
 					deslashedVar = deslashedVar[1:len(deslashedVar)]
 				}
@@ -175,15 +172,19 @@ func resolveVariable(component string, variables map[string]string, path string)
 		deslashedPart := strings.Split(part, "/")
 		for i, dsp := range deslashedPart {
 			if containsVariable(dsp) {
-				lookup := lookupVariable(dsp, variables, path)
-				// Lookup returned a string containing another variable.
+				lookup := variables[dsp]
+				if lookup == "" {
+					// we couldn't substitute the requested variable as there is no value definition
+					panic(fmt.Sprintf("Missing variable substitution for '%s'. route='%s'", dsp, path))
+				}
+				// Another lookup is required because value definition contains a variable.
 				if containsVariable(lookup) {
 					lookup = resolveVariable(lookup, variables, path)
 				}
 				deslashedPart[i] = lookup
 			}
-			// Recombine deslashed parts after they have been resolved.
 		}
+		// Recombine deslashed parts after they have been resolved.
 		resolvedPart := strings.Join(deslashedPart, "/")
 		resolved = strings.Join([]string{resolved, resolvedPart}, "")
 	}
@@ -203,15 +204,6 @@ func splitVariableComponent(s string) []string {
 		separated = append(resolveNested, s[delimIndex:])
 	}
 	return separated
-}
-
-func lookupVariable(part string, variables map[string]string, path string) string {
-	lookup := variables[part]
-	if lookup == "" {
-		// we couldn't substitute the requested variable as there is no value definition
-		panic(fmt.Sprintf("Missing variable substitution for '%s'. route='%s'", part, path))
-	}
-	return lookup
 }
 
 // String is the string representation of the object when printing
