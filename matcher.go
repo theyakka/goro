@@ -174,11 +174,11 @@ func checkNodesForMatches(method string, candidate MatchCandidate, nodes []*Node
 
 	for _, node := range nodes {
 		isWildcard := isWildcardPart(node.part)
-		if (node.nodeType == ComponentTypeFixed && node.part == candidate.part) ||
+		if (node.nodeType == ComponentTypeFixed && strings.ToLower(node.part) == strings.ToLower(candidate.part)) ||
 			isWildcard {
 			match := NewMatchWithParent(node, parentMatch)
 			if isWildcard {
-				paramKey := node.part[1:len(node.part)]
+				paramKey := strings.ToLower(node.part[1:len(node.part)])
 				arr := match.Params[paramKey]
 				if arr == nil {
 					arr = []string{}
