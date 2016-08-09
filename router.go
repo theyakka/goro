@@ -171,8 +171,7 @@ func (r *Router) SetStringVariable(variable string, value string) {
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	useReq := req
-	usePath := strings.ToLower(useReq.URL.Path) // always compare lower
-	usePath = filepath.Clean(usePath)
+	usePath := filepath.Clean(useReq.URL.Path)
 	method := strings.ToUpper(req.Method)
 
 	initialContext := req.Context()
