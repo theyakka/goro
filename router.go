@@ -170,24 +170,23 @@ func (r *Router) SetStringVariable(variable string, value string) {
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
-	useReq := req
-	usePath := filepath.Clean(useReq.URL.Path)
 	method := strings.ToUpper(req.Method)
-
 	initialContext := req.Context()
 	if initialContext == nil {
 		initialContext = context.Background()
 	}
-	outCtx := context.WithValue(initialContext, "path", usePath)
 
 	if r.filters != nil {
 		for _, filter := range r.filters {
-			originalReq := req.WithContext(outCtx)
+			originalReq := req.WithContext(initialContext)
 			filter.ExecuteFilter(&originalReq)
 			req = originalReq
-			outCtx = req.Context() // update the working context so we can pass it along
+			initialContext = req.Context() // update the working context so we can pass it along
 		}
 	}
+
+	usePath := filepath.Clean(req.URL.Path)
+	outCtx := context.WithValue(initialContext, "path", usePath)
 
 	// check to see if a global handler has been registered for the method
 	globalHandler := r.globalHandlers[method]
