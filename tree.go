@@ -82,13 +82,7 @@ func (t *Tree) AddRouteToTree(route *Route, variables map[string]string) {
 		processedSplit := []string{}
 		for _, component := range split {
 			if isVariablePart(component) {
-				variable := variables[component]
-				if variable == "" {
-					// we couldn't substitute the requested variable as there is no value definition
-					panic(fmt.Sprintf("Missing variable substitution for '%s'. route='%s'", component, path))
-					return
-				}
-				deslashedVar := variable
+				deslashedVar := resolveVariable(component, variables, path)
 				if strings.HasPrefix(deslashedVar, "/") {
 					deslashedVar = deslashedVar[1:len(deslashedVar)]
 				}
@@ -161,6 +155,55 @@ func isWildcardPart(part string) bool {
 
 func isCatchAllPart(part string) bool {
 	return strings.HasPrefix(part, "*")
+}
+
+func containsVariable(s string) bool {
+	return strings.Contains(s, "$")
+}
+
+// Returns a string with all variables resolved.
+// Takes in a string which may contain variables, a map 'variables' used
+// for lookup, and a string 'path' to construct panic statement if lookup fails.
+func resolveVariable(component string, variables map[string]string, path string) string {
+	resolved := ""
+	parts := splitVariableComponent(component)
+	for _, part := range parts {
+		// Split parts further to handle "/"s.
+		deslashedPart := strings.Split(part, "/")
+		for i, dsp := range deslashedPart {
+			if containsVariable(dsp) {
+				lookup := variables[dsp]
+				if lookup == "" {
+					// we couldn't substitute the requested variable as there is no value definition
+					panic(fmt.Sprintf("Missing variable substitution for '%s'. route='%s'", dsp, path))
+				}
+				// Another lookup is required because value definition contains a variable.
+				if containsVariable(lookup) {
+					lookup = resolveVariable(lookup, variables, path)
+				}
+				deslashedPart[i] = lookup
+			}
+		}
+		// Recombine deslashed parts after they have been resolved.
+		resolvedPart := strings.Join(deslashedPart, "/")
+		resolved = strings.Join([]string{resolved, resolvedPart}, "")
+	}
+	return resolved
+}
+
+// Splits a string into variables, and non-variable strings.
+// For example, "foo$bar$baz" => []string{ "foo", "$bar", "$baz" }
+func splitVariableComponent(s string) []string {
+	separated := []string{}
+	delimIndex := strings.LastIndex(s, "$")
+	if delimIndex == -1 {
+		// No variable components left to split
+		separated = []string{s}
+	} else {
+		resolveNested := splitVariableComponent(s[:delimIndex])
+		separated = append(resolveNested, s[delimIndex:])
+	}
+	return separated
 }
 
 // String is the string representation of the object when printing
