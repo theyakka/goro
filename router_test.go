@@ -31,13 +31,16 @@ type RequestMock struct {
 type TestFilter struct {
 }
 
-func testHandler1(rw http.ResponseWriter, req *http.Request) {
+func testHandler1(chain *Chain, rw http.ResponseWriter, req *http.Request) {
+	chain.Next()
 }
 
-func testHandler2(rw http.ResponseWriter, req *http.Request) {
+func testHandler2(chain *Chain, rw http.ResponseWriter, req *http.Request) {
+	chain.Next()
 }
 
-func testHandler3(rw http.ResponseWriter, req *http.Request) {
+func testHandler3(chain *Chain, rw http.ResponseWriter, req *http.Request) {
+	chain.Next()
 }
 
 func (tf TestFilter) ExecuteFilter(req **http.Request) {
@@ -84,7 +87,6 @@ func TestMain(t *testing.T) {
 		if catchAllObj != nil {
 			finalCatchAll = catchAllObj.(string)
 		}
-
 	})
 
 	chain := NewChain()

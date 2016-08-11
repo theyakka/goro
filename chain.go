@@ -28,6 +28,7 @@ type ChainHandler interface {
 // ChainHandlerFunc - HandlerFunc wrapper with access to the chain
 type ChainHandlerFunc func(chain *Chain, w http.ResponseWriter, req *http.Request)
 
+// Execute - execute the ChainHandlerFunc
 func (chf ChainHandlerFunc) Execute(chain *Chain, w http.ResponseWriter, req *http.Request) {
 	chf(chain, w, req)
 }
@@ -72,7 +73,8 @@ func (ch *Chain) AddFunc(v ...ChainHandlerFunc) *Chain {
 // Then calls the chain and then the designated Handler
 func (ch *Chain) Then(handler http.Handler) *Chain {
 	chain := &Chain{
-		Handlers: ch.Handlers,
+		Handlers:     ch.Handlers,
+		handlerIndex: 0,
 	}
 	wrapper := newChainHandlerWrapper(handler)
 	chain.Add(wrapper)
@@ -86,7 +88,7 @@ func (ch *Chain) ThenFunc(handlerFunc http.HandlerFunc) *Chain {
 
 // Next - execute the next handler in the chain
 func (ch *Chain) Next() {
-	ch.handlerIndex += 1
+	ch.handlerIndex++
 	if ch.handlerIndex < len(ch.Handlers) {
 		ch.Handlers[ch.handlerIndex].Execute(ch, ch.responseWriter, ch.request)
 	}
@@ -94,12 +96,18 @@ func (ch *Chain) Next() {
 
 // Halt - halt chain execution
 func (ch *Chain) Halt() {
+	ch.reset()
+}
+
+// reset - resets the chain
+func (ch *Chain) reset() {
 	ch.handlerIndex = 0
 }
 
 // ServeHTTP - execute default functionality
 func (ch *Chain) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if len(ch.Handlers) > 0 {
+		ch.reset()
 		ch.responseWriter = w
 		ch.request = req
 		ch.Handlers[0].Execute(ch, w, req)
