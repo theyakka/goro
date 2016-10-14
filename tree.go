@@ -30,14 +30,14 @@ type Tree struct {
 	nodes []*Node
 }
 
-// NewTree creates a new Tree instance
+// NewTree - creates a new Tree instance
 func NewTree() *Tree {
 	return &Tree{
 		nodes: []*Node{},
 	}
 }
 
-// NewNode creates a new Node instance and appends it to the tree
+// NewNode - creates a new Node instance and appends it to the tree
 func (t *Tree) NewNode(part string, parent *Node) *Node {
 	nodeType := ComponentTypeFixed
 	if strings.HasPrefix(part, "*") {
@@ -61,11 +61,15 @@ func (t *Tree) NewNode(part string, parent *Node) *Node {
 	return node
 }
 
-// AddRouteToTree splits the route into Nodes and adds them to the tree
+// AddRouteToTree - splits the route into Nodes and adds them to the tree
 func (t *Tree) AddRouteToTree(route *Route, variables map[string]string) {
 	path := route.PathFormat
-	deslashedPath := path[1:len(path)]
+	deslashedPath := path
+	if strings.HasPrefix(deslashedPath, "/") {
+		deslashedPath = path[1:len(path)]
+	}
 	split := strings.Split(deslashedPath, "/")
+
 	if route.IsRoot() {
 		node := t.NewNode("/", nil)
 		if node.routes == nil {
@@ -73,22 +77,31 @@ func (t *Tree) AddRouteToTree(route *Route, variables map[string]string) {
 		}
 		node.routes[route.Method] = route
 	} else {
+		// check to see if we need to do any variable substitution before parsing
+		// NOTE: does not support nested variables
+		processedSplit := []string{}
+		for _, component := range split {
+			if isVariablePart(component) {
+				deslashedVar := resolveVariable(component, variables, path)
+				if strings.HasPrefix(deslashedVar, "/") {
+					deslashedVar = deslashedVar[1:len(deslashedVar)]
+				}
+				splitVar := strings.Split(deslashedVar, "/")
+				processedSplit = append(processedSplit, splitVar...)
+			} else {
+				processedSplit = append(processedSplit, component)
+			}
+		}
+
+		split = processedSplit
+
 		var parentNode *Node
 		var node *Node
 		for _, component := range split {
-			componentToUse := component
-			// check to see if we need to do any variable substitution before parsing
-			if isVariablePart(component) {
-				componentToUse = variables[component]
-				if componentToUse == "" {
-					// we couldn't substitute the requested variable as there is no value definition
-					panic(fmt.Sprintf("Missing variable substitution for '%s'. route='%s'", component, path))
-				}
-			}
 			// get an existing node for this segment or attach to the tree
-			node = t.nodeForExactPart(componentToUse, parentNode)
+			node = t.nodeForExactPart(component, parentNode)
 			if node == nil {
-				node = t.NewNode(componentToUse, parentNode)
+				node = t.NewNode(component, parentNode)
 			}
 			parentNode = node
 		}
@@ -117,12 +130,12 @@ func (t *Tree) nodeForExactPart(part string, parentNode *Node) *Node {
 	return nil
 }
 
-// HasChildren returns true if the Node has 1 or more sub-Nodes
+// HasChildren - returns true if the Node has 1 or more sub-Nodes
 func (node *Node) HasChildren() bool {
 	return node.nodes != nil && len(node.nodes) > 0
 }
 
-// RouteForMethod returns the route that was defined for the method or nil if
+// RouteForMethod - returns the route that was defined for the method or nil if
 // no route is defined
 func (node *Node) RouteForMethod(method string) *Route {
 	if node.routes != nil && len(node.routes) > 0 {
@@ -131,20 +144,72 @@ func (node *Node) RouteForMethod(method string) *Route {
 	return nil
 }
 
-// part type helper functions
+// isVariablePart - is the string (part) a variable part
 func isVariablePart(part string) bool {
 	return strings.HasPrefix(part, "$")
 }
 
+// isWildcardPart - is the string (part) a wildcard part
 func isWildcardPart(part string) bool {
 	return strings.HasPrefix(part, ":")
 }
 
+// isCatchAllPart - is the string (part) a catch-all part
 func isCatchAllPart(part string) bool {
 	return strings.HasPrefix(part, "*")
 }
 
-// String is the string representation of the object when printing
+// containsVariablePrefix - does the string contain a variable prefix value
+func containsVariablePrefix(s string) bool {
+	return strings.Contains(s, "$")
+}
+
+// resolveVariable - returns a string with all variables resolved.
+// Takes in a string which may contain variables, a map 'variables' used
+// for lookup, and a string 'path' to construct panic statement if lookup fails.
+func resolveVariable(component string, variables map[string]string, path string) string {
+	resolved := ""
+	parts := splitVariableComponent(component)
+	for _, part := range parts {
+		// Split parts further to handle "/"s.
+		deslashedPart := strings.Split(part, "/")
+		for i, dsp := range deslashedPart {
+			if containsVariablePrefix(dsp) {
+				lookup := variables[dsp]
+				if lookup == "" {
+					// we couldn't substitute the requested variable as there is no value definition
+					panic(fmt.Sprintf("Missing variable substitution for '%s'. route='%s'", dsp, path))
+				}
+				// Another lookup is required because value definition contains a variable.
+				if containsVariablePrefix(lookup) {
+					lookup = resolveVariable(lookup, variables, path)
+				}
+				deslashedPart[i] = lookup
+			}
+		}
+		// Recombine deslashed parts after they have been resolved.
+		resolvedPart := strings.Join(deslashedPart, "/")
+		resolved = strings.Join([]string{resolved, resolvedPart}, "")
+	}
+	return resolved
+}
+
+// splitVariableComponent - Splits a string into variables, and non-variable
+// strings. For example, "foo$bar$baz" => []string{ "foo", "$bar", "$baz" }
+func splitVariableComponent(s string) []string {
+	separated := []string{}
+	delimIndex := strings.LastIndex(s, "$")
+	if delimIndex == -1 {
+		// No variable components left to split
+		separated = []string{s}
+	} else {
+		resolveNested := splitVariableComponent(s[:delimIndex])
+		separated = append(resolveNested, s[delimIndex:])
+	}
+	return separated
+}
+
+// String - the string representation of the object when printing
 func (node *Node) String() string {
 	return fmt.Sprintf("goro.Node # type=%d, part=%s, children=%d, routes=%v",
 		node.nodeType, node.part, len(node.nodes), node.routes)

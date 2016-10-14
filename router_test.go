@@ -31,13 +31,16 @@ type RequestMock struct {
 type TestFilter struct {
 }
 
-func testHandler1(rw http.ResponseWriter, req *http.Request) {
+func testHandler1(chain *Chain, rw http.ResponseWriter, req *http.Request) {
+	chain.Next()
 }
 
-func testHandler2(rw http.ResponseWriter, req *http.Request) {
+func testHandler2(chain *Chain, rw http.ResponseWriter, req *http.Request) {
+	chain.Next()
 }
 
-func testHandler3(rw http.ResponseWriter, req *http.Request) {
+func testHandler3(chain *Chain, rw http.ResponseWriter, req *http.Request) {
+	chain.Next()
 }
 
 func (tf TestFilter) ExecuteFilter(req **http.Request) {
@@ -84,13 +87,17 @@ func TestMain(t *testing.T) {
 		if catchAllObj != nil {
 			finalCatchAll = catchAllObj.(string)
 		}
-
 	})
 
 	chain := NewChain()
 	chain.AddFunc(testHandler1, testHandler3, testHandler2)
 
 	testHandle := chain.ThenFunc(testHandler)
+
+	router.SetStringVariable("a", "alpha$b$c")
+	router.SetStringVariable("b", "bar")
+	router.SetStringVariable("c", "$d")
+	router.SetStringVariable("d", "baz")
 
 	router.Add("GET", "/").
 		Handle(testHandle)
@@ -105,6 +112,8 @@ func TestMain(t *testing.T) {
 	router.Add("GET", "/users/:id/show/:what").
 		Handle(testHandle)
 	router.Add("GET", "/*").
+		Handle(testHandle)
+	router.Add("GET", "/$a$b").
 		Handle(testHandle)
 
 	reqMocks := []RequestMock{

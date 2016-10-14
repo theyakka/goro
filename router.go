@@ -108,13 +108,15 @@ func (r *Router) NewMatcher() *Matcher {
 // Add creates a new Route and registers the instance within the Router
 func (r *Router) Add(method string, path string) *Route {
 	route := NewRoute(method, path)
-	return r.Use(route)
+	return r.Use(route)[0]
 }
 
-// Use registers a Route instance within the Router
-func (r *Router) Use(route *Route) *Route {
-	r.routes.AddRouteToTree(route, r.variables)
-	return route
+// Use registers one or more Route instances within the Router
+func (r *Router) Use(routes ...*Route) []*Route {
+	for _, route := range routes {
+		r.routes.AddRouteToTree(route, r.variables)
+	}
+	return routes
 }
 
 // AddStatic registers a directory to serve static files
@@ -168,25 +170,23 @@ func (r *Router) SetStringVariable(variable string, value string) {
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
-	useReq := req
-	usePath := strings.ToLower(useReq.URL.Path) // always compare lower
-	usePath = filepath.Clean(usePath)
 	method := strings.ToUpper(req.Method)
-
 	initialContext := req.Context()
 	if initialContext == nil {
 		initialContext = context.Background()
 	}
-	outCtx := context.WithValue(initialContext, "path", usePath)
 
 	if r.filters != nil {
 		for _, filter := range r.filters {
-			originalReq := req.WithContext(outCtx)
+			originalReq := req.WithContext(initialContext)
 			filter.ExecuteFilter(&originalReq)
 			req = originalReq
-			outCtx = req.Context() // update the working context so we can pass it along
+			initialContext = req.Context() // update the working context so we can pass it along
 		}
 	}
+
+	usePath := filepath.Clean(req.URL.Path)
+	outCtx := context.WithValue(initialContext, "path", usePath)
 
 	// check to see if a global handler has been registered for the method
 	globalHandler := r.globalHandlers[method]
