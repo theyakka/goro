@@ -52,7 +52,7 @@ func (tf TestFilter) ExecuteFilter(req **http.Request) {
 func okHandler(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	Log("OK!")
-	fmt.Fprintf(rw, "OK: called '%s' -> %s", ctx.Value("path"), req.Method)
+	fmt.Fprintf(rw, "OK: called '%s' -> %s", ctx.Value(PathContextKey), req.Method)
 }
 
 func errHandler(rw http.ResponseWriter, req *http.Request) {
@@ -81,8 +81,8 @@ func TestMain(t *testing.T) {
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		calledTestHandler = true
 		ctx := req.Context()
-		finalParams = ctx.Value("params").(map[string][]string)
-		catchAllObj := ctx.Value("catchAll")
+		finalParams = ctx.Value(ParametersContextKey).(map[string][]string)
+		catchAllObj := ctx.Value(CatchAllValueContextKey)
 		finalCatchAll = ""
 		if catchAllObj != nil {
 			finalCatchAll = catchAllObj.(string)
@@ -100,6 +100,8 @@ func TestMain(t *testing.T) {
 	router.SetStringVariable("d", "baz")
 
 	router.Add("GET", "/").
+		Handle(testHandle)
+	router.Add("POST", "/login").
 		Handle(testHandle)
 	router.Add("GET", "/users/:id/*").
 		Handle(testHandle)
@@ -124,6 +126,9 @@ func TestMain(t *testing.T) {
 		RequestMock{Method: "POST", URL: "/test/route", CheckSuccess: false},
 		RequestMock{Method: "GET", URL: "/users/123/show/something", CheckSuccess: true},
 		RequestMock{Method: "GET", URL: "users/123/show/something", CheckSuccess: true},
+		RequestMock{Method: "POST", URL: "/login", CheckSuccess: true},
+		RequestMock{Method: "GET", URL: "/login", CheckSuccess: false},
+		RequestMock{Method: "GET", URL: "/something", CheckSuccess: true},
 	}
 
 	for _, mock := range reqMocks {
@@ -131,9 +136,10 @@ func TestMain(t *testing.T) {
 		w := httptest.NewRecorder()
 		calledTestHandler = false
 		router.ServeHTTP(w, r)
-		Log("should_pass:", calledTestHandler, " url:", mock.URL, " method:", mock.Method)
+		Log("• TEST: url =", mock.URL)
+		Log("  method =", mock.Method, "; called handler? =", calledTestHandler)
 		if calledTestHandler != mock.CheckSuccess {
-			t.Error("Handler check failed")
+			t.Error("*** Handler check failed for", mock.URL)
 		}
 	}
 
@@ -193,12 +199,13 @@ func TestMain(t *testing.T) {
 		finalParams = nil
 		finalCatchAll = ""
 		router.ServeHTTP(w, r)
-		Log("should_pass:", calledTestHandler, " url:", mock.URL, " method:", mock.Method)
+		Log("Testing: ", mock.URL)
+		Log("  should_pass:", calledTestHandler, " method:", mock.Method)
 		if calledTestHandler != mock.CheckSuccess {
-			t.Error("Handler check failed")
+			t.Error("*** Handler check failed")
 		} else {
-			Log("params: ", finalParams)
-			Log("catch-all:", finalCatchAll)
+			Log("  params: ", finalParams)
+			Log("  catch-all:", finalCatchAll)
 			if mock.CheckCatchAll == true && mock.CheckCatchAllValue != "" {
 				if finalCatchAll != mock.CheckCatchAllValue {
 					t.Error("Catch-all value check failed")

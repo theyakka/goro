@@ -37,6 +37,15 @@ type Router struct {
 	// according to the path they were matched to
 	ShouldCacheMatchedRoutes bool
 
+	// AlwaysUseFirstMatch - Should the route matcher use the first match regardless?
+	// If set to false, the matcher will check allowed methods for an exact match and
+	// try to fallback to a catch-all route if the method is not allowed.
+	AlwaysUseFirstMatch bool
+
+	// MethodNotAllowedIsError - Should the router fail if the route exists but the
+	// mapped http methods do not match the one requested?
+	MethodNotAllowedIsError bool
+
 	// BeforeChain - a Chain of handlers that will always be executed before the Route handler
 	BeforeChain Chain
 
@@ -73,6 +82,8 @@ func NewRouter() *Router {
 	router := &Router{
 		ErrorHandler:             nil,
 		ShouldCacheMatchedRoutes: true,
+		AlwaysUseFirstMatch:      false,
+		MethodNotAllowedIsError:  true,
 		errorHandlers:            map[int]http.Handler{},
 		globalHandlers:           map[string]http.Handler{},
 		staticLocations:          []StaticLocation{},
@@ -82,7 +93,11 @@ func NewRouter() *Router {
 		cache:                    NewRouteCache(),
 		debugLevel:               DebugLevelNone,
 	}
-	router.routeMatcher = NewMatcher(router)
+	matcher := NewMatcher(router)
+	matcher.FallbackToCatchAll = router.AlwaysUseFirstMatch == false &&
+		router.MethodNotAllowedIsError == false
+	router.routeMatcher = matcher
+
 	return router
 }
 
@@ -186,7 +201,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	usePath := filepath.Clean(req.URL.Path)
-	outCtx := context.WithValue(initialContext, "path", usePath)
+	outCtx := context.WithValue(initialContext, PathContextKey, usePath)
 
 	// check to see if a global handler has been registered for the method
 	globalHandler := r.globalHandlers[method]
@@ -213,9 +228,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 			handler := route.Handler
 			if handler != nil {
-				outCtx = context.WithValue(outCtx, "params", match.Params)
+				outCtx = context.WithValue(outCtx, ParametersContextKey, match.Params)
 				if match.CatchAllValue != "" {
-					outCtx = context.WithValue(outCtx, "catchAll", match.CatchAllValue)
+					outCtx = context.WithValue(outCtx, CatchAllValueContextKey, match.CatchAllValue)
 				}
 				handler.ServeHTTP(w, req.WithContext(outCtx))
 				return
