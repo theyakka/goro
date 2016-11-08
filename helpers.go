@@ -1,3 +1,12 @@
+// Goro
+//
+// Created by Posse in NYC
+// http://goposse.com
+//
+// Copyright (c) 2016 Posse Productions LLC.
+// All rights reserved.
+// See the LICENSE file for licensing details and requirements.
+
 package goro
 
 import (
@@ -7,7 +16,7 @@ import (
 
 // ParamsFromContext - get the current params value from a given context
 func ParamsFromContext(ctx context.Context) url.Values {
-	params := ctx.Value("params")
+	params := ctx.Value(ParametersContextKey)
 	if params != nil {
 		return url.Values(params.(map[string][]string))
 	}

@@ -18,8 +18,9 @@ import (
 
 // Matcher is the global matching engine
 type Matcher struct {
-	router       *Router
-	LogMatchTime bool
+	router             *Router
+	LogMatchTime       bool
+	FallbackToCatchAll bool
 }
 
 // Match represents a matched node in the tree
@@ -67,8 +68,9 @@ func (match *Match) String() string {
 // NewMatcher creates a new instance of the Matcher
 func NewMatcher(router *Router) *Matcher {
 	return &Matcher{
-		router:       router,
-		LogMatchTime: false,
+		router:             router,
+		LogMatchTime:       false,
+		FallbackToCatchAll: true,
 	}
 }
 
@@ -94,11 +96,11 @@ func (m *Matcher) MatchPathToRoute(method string, path string, req *http.Request
 		var matches []*Match
 		var catchAllMatches []*Match
 		if currentMatches == nil {
-			matches, catchAllMatches, _ = matchNodesForCandidate(method, candidate, nodesToCheck)
+			matches, catchAllMatches, _ = m.matchNodesForCandidate(method, candidate, nodesToCheck)
 			// Log("++", candidate.part)
-			// Log("++", matches)
+			// Log("++", matches, catchAllMatches)
 		} else {
-			matches, catchAllMatches, _ = matchCurrentMatchesForCandidate(method, candidate, currentMatches)
+			matches, catchAllMatches, _ = m.matchCurrentMatchesForCandidate(method, candidate, currentMatches)
 			// Log("--", candidate.part)
 			// Log("--", matches)
 		}
@@ -126,8 +128,21 @@ func (m *Matcher) MatchPathToRoute(method string, path string, req *http.Request
 
 	var matchToUse *Match
 	if len(finalMatches) > 0 {
-		matchToUse = finalMatches[0]
-	} else if len(catchAlls) > 0 {
+		if !m.FallbackToCatchAll {
+			matchToUse = finalMatches[0]
+		} else {
+			// check to see if the match contains a route that matches the requested method.
+			// if not, fallback to a catch-all route (if one is matched)
+			for _, match := range finalMatches {
+				if match.Node.RouteForMethod(method) != nil {
+					matchToUse = match
+					break
+				}
+			}
+		}
+	}
+
+	if matchToUse == nil && len(catchAlls) > 0 {
 		matchToUse = catchAlls[0]
 	}
 
@@ -142,21 +157,21 @@ func (m *Matcher) MatchPathToRoute(method string, path string, req *http.Request
 	return matchToUse
 }
 
-func matchNodesForCandidate(method string, candidate MatchCandidate, nodes []*Node) (matches []*Match, catchalls []*Match, errorCode int) {
+func (m *Matcher) matchNodesForCandidate(method string, candidate MatchCandidate, nodes []*Node) (matches []*Match, catchalls []*Match, errorCode int) {
 	if candidate != NoMatchCandidate() {
-		return checkNodesForMatches(method, candidate, nodes, nil)
+		return m.checkNodesForMatches(method, candidate, nodes, nil)
 	}
 	return []*Match{}, []*Match{}, 0
 }
 
-func matchCurrentMatchesForCandidate(method string, candidate MatchCandidate, currentMatches []*Match) (matches []*Match, catchalls []*Match, errorCode int) {
+func (m *Matcher) matchCurrentMatchesForCandidate(method string, candidate MatchCandidate, currentMatches []*Match) (matches []*Match, catchalls []*Match, errorCode int) {
 	matchedNodes := []*Match{}
 	catchAllNodes := []*Match{}
 	errCode := 0
 	for _, match := range currentMatches {
 		node := match.Node
 		if node.HasChildren() {
-			nodeMatches, nodeCatchAlls, matchErrCode := checkNodesForMatches(method, candidate, node.nodes, match)
+			nodeMatches, nodeCatchAlls, matchErrCode := m.checkNodesForMatches(method, candidate, node.nodes, match)
 			matchedNodes = append(matchedNodes, nodeMatches...)
 			catchAllNodes = append(catchAllNodes, nodeCatchAlls...)
 			if errCode != 0 {
@@ -167,7 +182,7 @@ func matchCurrentMatchesForCandidate(method string, candidate MatchCandidate, cu
 	return matchedNodes, catchAllNodes, errCode
 }
 
-func checkNodesForMatches(method string, candidate MatchCandidate, nodes []*Node, parentMatch *Match) (matches []*Match, catchalls []*Match, errorCode int) {
+func (m *Matcher) checkNodesForMatches(method string, candidate MatchCandidate, nodes []*Node, parentMatch *Match) (matches []*Match, catchalls []*Match, errorCode int) {
 	matchedNodes := []*Match{}
 	catchAllNodes := []*Match{}
 	errCode := 0
@@ -187,7 +202,7 @@ func checkNodesForMatches(method string, candidate MatchCandidate, nodes []*Node
 				match.Params[paramKey] = arr
 			}
 			matchedNodes = append(matchedNodes, match)
-			if !candidate.HasRemainingCandidates() {
+			if m.FallbackToCatchAll == false && candidate.HasRemainingCandidates() == false {
 				break // break early, we found a match
 			}
 		} else if isCatchAllPart(node.part) {
