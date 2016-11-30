@@ -324,9 +324,19 @@ func errorHandler(w http.ResponseWriter, req *http.Request, errorString string, 
 
 func (r *Router) recoverPanic(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	if panicRecover := recover(); panicRecover != nil {
+		var message string = ""
+		switch panicRecover.(type) {
+		case error:
+			message = panicRecover.(error).Error()
+		case string:
+			message = panicRecover.(string)
+		default:
+			message = "Panic! Please check the 'error' value for details"
+		}
 		err := ErrorMap{
 			"code":    ErrorCodePanic,
-			"message": panicRecover,
+			"message": message,
+			"error":   panicRecover,
 		}
 		outCtx := context.WithValue(ctx, ErrorValueContextKey, err)
 		r.ErrorHandler.ServeHTTP(w, req.WithContext(outCtx))
