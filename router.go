@@ -288,7 +288,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		// return a generic http error
-		errorHandler(w, req, matchError, matchErrorCode)
+		errorHandler(w, req.WithContext(outCtx), matchError, matchErrorCode)
 	}
 }
 
