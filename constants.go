@@ -20,3 +20,14 @@ const ParametersContextKey ContextKey = 1
 
 // CatchAllValueContextKey - contains the found catch all value
 const CatchAllValueContextKey ContextKey = 2
+
+// ErrorValueContextKey - contains the value of any generic error that occurred
+const ErrorValueContextKey ContextKey = 3
+
+// error codes
+
+// RouterErrorCode - type used to represent an error in the routing request
+type RouterErrorCode int
+
+// ErrorCodePanic - error code used when recovering from a panic
+const ErrorCodePanic RouterErrorCode = 777

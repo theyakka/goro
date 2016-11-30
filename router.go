@@ -219,6 +219,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	usePath := filepath.Clean(req.URL.Path)
 	outCtx := context.WithValue(initialContext, PathContextKey, usePath)
 
+	if r.ErrorHandler != nil {
+		defer r.recoverPanic(outCtx, w, req)
+	}
+
 	// check to see if a global handler has been registered for the method
 	globalHandler := r.globalHandlers[method]
 	if globalHandler != nil {
@@ -270,7 +274,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			"code":    matchErrorCode,
 			"message": matchError,
 		}
-		outCtx = context.WithValue(outCtx, "error", err)
+		outCtx = context.WithValue(outCtx, ErrorValueContextKey, err)
 
 		// try to call specific error handler
 		errHandler := r.errorHandlers[matchErrorCode]
@@ -316,6 +320,17 @@ func (r *Router) shouldServeStaticFile(w http.ResponseWriter, req *http.Request,
 
 func errorHandler(w http.ResponseWriter, req *http.Request, errorString string, errorCode int) {
 	http.Error(w, errorString, errorCode)
+}
+
+func (r *Router) recoverPanic(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+	if panicRecover := recover(); panicRecover != nil {
+		err := map[string]interface{}{
+			"code":    ErrorCodePanic,
+			"message": panicRecover,
+		}
+		outCtx := context.WithValue(ctx, ErrorValueContextKey, err)
+		r.ErrorHandler.ServeHTTP(w, req.WithContext(outCtx))
+	}
 }
 
 // PrintTreeInfo prints debugging information about all registered Routes
