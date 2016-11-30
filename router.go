@@ -271,8 +271,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	if matchErrorCode != 0 {
 		err := ErrorMap{
-			"code":    matchErrorCode,
-			"message": matchError,
+			"code":        matchErrorCode,
+			"status_code": matchErrorCode,
+			"message":     matchError,
 		}
 		outCtx = context.WithValue(outCtx, ErrorValueContextKey, err)
 
@@ -334,9 +335,10 @@ func (r *Router) recoverPanic(ctx context.Context, w http.ResponseWriter, req *h
 			message = "Panic! Please check the 'error' value for details"
 		}
 		err := ErrorMap{
-			"code":    ErrorCodePanic,
-			"message": message,
-			"error":   panicRecover,
+			"code":        ErrorCodePanic,
+			"status_code": http.StatusInternalServerError,
+			"message":     message,
+			"error":       panicRecover,
 		}
 		outCtx := context.WithValue(ctx, ErrorValueContextKey, err)
 		r.ErrorHandler.ServeHTTP(w, req.WithContext(outCtx))
