@@ -15,8 +15,8 @@ import (
 	"net/url"
 )
 
-// ParamsFromContext - get the current params value from a given context
-func ParamsFromContext(ctx context.Context) url.Values {
+// RouteParamsFromContext - get the current params value from a given context
+func RouteParamsFromContext(ctx context.Context) url.Values {
 	params := ctx.Value(ParametersContextKey)
 	if params != nil {
 		return url.Values(params.(map[string][]string))
@@ -24,8 +24,8 @@ func ParamsFromContext(ctx context.Context) url.Values {
 	return nil
 }
 
-// ParamsWithoutID - returns copy of params with ID removed.
-func ParamsWithoutID(params url.Values) url.Values {
+// RouteParamsWithoutID - returns copy of params with ID removed.
+func RouteParamsWithoutID(params url.Values) url.Values {
 	if params != nil {
 		paramsCopy := make(url.Values)
 		for k, v := range params {
@@ -37,17 +37,17 @@ func ParamsWithoutID(params url.Values) url.Values {
 	return nil
 }
 
-// FirstStringParam - return the first item in the array if it exists, otherwise return
+// FirstStringRouteParam - return the first item in the array if it exists, otherwise return
 // an empty string
-func FirstStringParam(params []string) string {
+func FirstStringRouteParam(params []string) string {
 	if params != nil && len(params) > 0 {
 		return params[0]
 	}
 	return ""
 }
 
-// FirstParam - return the first item in the array if it exists, otherwise return nil
-func FirstParam(params []interface{}) interface{} {
+// FirstRouteParam - return the first item in the array if it exists, otherwise return nil
+func FirstRouteParam(params []interface{}) interface{} {
 	if params != nil && len(params) > 0 {
 		return params[0]
 	}
