@@ -15,6 +15,9 @@ import (
 	"os"
 )
 
+// ErrorMap - a map type used for routing error information
+type ErrorMap map[string]interface{}
+
 // logger - shared logger instance
 var logger *log.Logger
 

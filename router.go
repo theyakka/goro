@@ -270,7 +270,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if matchErrorCode != 0 {
-		err := map[string]interface{}{
+		err := ErrorMap{
 			"code":    matchErrorCode,
 			"message": matchError,
 		}
@@ -324,7 +324,7 @@ func errorHandler(w http.ResponseWriter, req *http.Request, errorString string, 
 
 func (r *Router) recoverPanic(ctx context.Context, w http.ResponseWriter, req *http.Request) {
 	if panicRecover := recover(); panicRecover != nil {
-		err := map[string]interface{}{
+		err := ErrorMap{
 			"code":    ErrorCodePanic,
 			"message": panicRecover,
 		}

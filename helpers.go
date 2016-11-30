@@ -11,6 +11,7 @@ package goro
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 )
 
@@ -49,6 +50,15 @@ func FirstStringParam(params []string) string {
 func FirstParam(params []interface{}) interface{} {
 	if params != nil && len(params) > 0 {
 		return params[0]
+	}
+	return nil
+}
+
+// ErrorInfoForRequest - returns the error info for the request (if any)
+func ErrorInfoForRequest(req *http.Request) ErrorMap {
+	errInfo := req.Context().Value(ErrorValueContextKey)
+	if errInfo != nil {
+		return errInfo.(ErrorMap)
 	}
 	return nil
 }
