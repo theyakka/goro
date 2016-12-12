@@ -12,6 +12,7 @@ package goro
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -31,15 +32,18 @@ type RequestMock struct {
 type TestFilter struct {
 }
 
-func testHandler1(chain *Chain, rw http.ResponseWriter, req *http.Request) {
+func testHandler1(chain Chain, rw http.ResponseWriter, req *http.Request) {
+	log.Println("TH1")
 	chain.Next()
 }
 
-func testHandler2(chain *Chain, rw http.ResponseWriter, req *http.Request) {
+func testHandler2(chain Chain, rw http.ResponseWriter, req *http.Request) {
+	log.Println("TH2")
 	chain.Next()
 }
 
-func testHandler3(chain *Chain, rw http.ResponseWriter, req *http.Request) {
+func testHandler3(chain Chain, rw http.ResponseWriter, req *http.Request) {
+	log.Println("TH3")
 	chain.Next()
 }
 
@@ -79,6 +83,7 @@ func TestMain(t *testing.T) {
 	var finalParams map[string][]string
 	var finalCatchAll string
 	testHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		log.Println("Test handler!!")
 		calledTestHandler = true
 		ctx := req.Context()
 		finalParams = ctx.Value(ParametersContextKey).(map[string][]string)
@@ -89,10 +94,13 @@ func TestMain(t *testing.T) {
 		}
 	})
 
-	chain := NewChain()
-	chain.AddFunc(testHandler1, testHandler3, testHandler2)
+	chain := NewChainWithFuncs(testHandler1, testHandler3, testHandler2)
+	chain = chain.AddResultCallback(func(result ChainResult) {
+		log.Println("Chain completed")
+	})
+	router.BeforeChain = chain
 
-	testHandle := chain.ThenFunc(testHandler)
+	testHandle := testHandler
 
 	router.SetStringVariable("a", "alpha$b$c")
 	router.SetStringVariable("b", "bar")
@@ -202,7 +210,7 @@ func TestMain(t *testing.T) {
 		Log("Testing: ", mock.URL)
 		Log("  should_pass:", calledTestHandler, " method:", mock.Method)
 		if calledTestHandler != mock.CheckSuccess {
-			t.Error("*** Handler check failed")
+			t.Error("*** Handler check failed for", mock.URL)
 		} else {
 			Log("  params: ", finalParams)
 			Log("  catch-all:", finalCatchAll)

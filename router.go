@@ -252,7 +252,21 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				if match.CatchAllValue != "" {
 					outCtx = context.WithValue(outCtx, CatchAllValueContextKey, match.CatchAllValue)
 				}
-				handler.ServeHTTP(w, req.WithContext(outCtx))
+				useReq := req.WithContext(outCtx)
+				if len(r.BeforeChain.Handlers) > 0 {
+					chain := r.BeforeChain
+					chain.resultCompletedFunc = func(result ChainResult) {
+						if result.Status == ChainCompleted {
+							handler.ServeHTTP(w, useReq)
+						}
+						for _, callback := range chain.resultCallbacks {
+							callback(result)
+						}
+					}
+					chain.ServeHTTP(w, useReq)
+				} else {
+					handler.ServeHTTP(w, useReq)
+				}
 				return
 			}
 		} else {
