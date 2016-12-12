@@ -258,9 +258,36 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 					chain.resultCompletedFunc = func(result ChainResult) {
 						if result.Status == ChainCompleted {
 							handler.ServeHTTP(w, useReq)
-						}
-						for _, callback := range chain.resultCallbacks {
-							callback(result)
+						} else {
+							// TODO - make this block of code generic
+							statusCode := result.StatusCode
+							if statusCode == 0 {
+								statusCode = http.StatusInternalServerError
+							}
+							errorMessage := "Server execution failed"
+							if result.Error != nil {
+								errorMessage = result.Error.Error()
+							}
+							err := ErrorMap{
+								"code":        RouterErrorCode(result.Status),
+								"status_code": statusCode,
+								"message":     errorMessage,
+							}
+							outCtx = context.WithValue(outCtx, ErrorValueContextKey, err)
+
+							// try to call specific error handler
+							errHandler := r.errorHandlers[matchErrorCode]
+							if errHandler != nil {
+								errHandler.ServeHTTP(w, req.WithContext(outCtx))
+								return
+							}
+							// if generic error handler defined, call that
+							if r.ErrorHandler != nil {
+								r.ErrorHandler.ServeHTTP(w, req.WithContext(outCtx))
+								return
+							}
+							// return a generic http error
+							errorHandler(w, req.WithContext(outCtx), matchError, matchErrorCode)
 						}
 					}
 					chain.ServeHTTP(w, useReq)

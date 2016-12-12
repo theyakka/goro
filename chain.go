@@ -25,8 +25,9 @@ const (
 
 // ChainResult - the chain execution result
 type ChainResult struct {
-	Status ChainStatus
-	Error  error
+	Status     ChainStatus
+	Error      error
+	StatusCode int
 }
 
 // Chain allows for chaining of Handlers
@@ -37,8 +38,6 @@ type Chain struct {
 
 	// Handlers - the handlers in the Chain
 	Handlers []ChainHandler
-
-	resultCallbacks []ChainCompletedFunc
 
 	// resultCompletedFunc - used internally when chain completes
 	resultCompletedFunc ChainCompletedFunc
@@ -80,8 +79,7 @@ func (chw chainHandlerWrapper) Execute(chain Chain, w http.ResponseWriter, req *
 // NewChain - creates a new Chain instance
 func NewChain(handlers ...ChainHandler) Chain {
 	return Chain{
-		Handlers:        handlers,
-		resultCallbacks: make([]ChainCompletedFunc, 0),
+		Handlers: handlers,
 	}
 }
 
@@ -92,8 +90,7 @@ func NewChainWithFuncs(handlers ...ChainHandlerFunc) Chain {
 		allHandlers = append(allHandlers, ChainHandler(hfunc))
 	}
 	return Chain{
-		Handlers:        allHandlers,
-		resultCallbacks: make([]ChainCompletedFunc, 0),
+		Handlers: allHandlers,
 	}
 }
 
@@ -104,8 +101,7 @@ func (ch Chain) Append(handlers ...ChainHandler) Chain {
 	allHandlers = append(allHandlers, ch.Handlers...)
 	allHandlers = append(allHandlers, handlers...)
 	return Chain{
-		Handlers:        allHandlers,
-		resultCallbacks: ch.resultCallbacks,
+		Handlers: allHandlers,
 	}
 }
 
@@ -118,17 +114,7 @@ func (ch Chain) AppendFunc(handlers ...ChainHandlerFunc) Chain {
 		allHandlers = append(allHandlers, ChainHandler(hfunc))
 	}
 	return Chain{
-		Handlers:        allHandlers,
-		resultCallbacks: ch.resultCallbacks,
-	}
-}
-
-func (ch Chain) AddResultCallback(callback ChainCompletedFunc) Chain {
-	resultCallbacks := make([]ChainCompletedFunc, 0, len(ch.resultCallbacks)+1)
-	resultCallbacks = append(resultCallbacks, callback)
-	return Chain{
-		Handlers:        ch.Handlers,
-		resultCallbacks: resultCallbacks,
+		Handlers: allHandlers,
 	}
 }
 
@@ -150,7 +136,7 @@ func (ch Chain) Next() {
 	if ch.handlerIndex < handlersCount {
 		ch.Handlers[ch.handlerIndex].Execute(ch, ch.responseWriter, ch.request)
 	}
-	if ch.handlerIndex == handlersCount-1 {
+	if ch.handlerIndex == handlersCount {
 		result := ChainResult{Status: ChainCompleted, Error: nil}
 		ch.resultCompletedFunc(result)
 		ch.reset()
@@ -158,15 +144,15 @@ func (ch Chain) Next() {
 }
 
 // Halt - halt chain execution
-func (ch Chain) Halt() {
-	result := ChainResult{Status: ChainHalted, Error: nil}
+func (ch Chain) Halt(haltError error) {
+	result := ChainResult{Status: ChainHalted, Error: haltError, StatusCode: http.StatusInternalServerError}
 	ch.resultCompletedFunc(result)
 	ch.reset()
 }
 
 // Error - halt the chain and report an error
-func (ch Chain) Error(chainError error) {
-	result := ChainResult{Status: ChainError, Error: chainError}
+func (ch Chain) Error(chainError error, statusCode int) {
+	result := ChainResult{Status: ChainError, Error: chainError, StatusCode: statusCode}
 	ch.resultCompletedFunc(result)
 	ch.reset()
 }
