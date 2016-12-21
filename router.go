@@ -256,8 +256,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				if len(r.BeforeChain.Handlers) > 0 {
 					chain := r.BeforeChain
 					chain.resultCompletedFunc = func(result ChainResult) {
+						resultReq := result.Request
 						if result.Status == ChainCompleted {
-							handler.ServeHTTP(w, useReq)
+							handler.ServeHTTP(w, resultReq)
 						} else {
 							// TODO - make this block of code generic
 							statusCode := result.StatusCode
@@ -278,16 +279,16 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 							// try to call specific error handler
 							errHandler := r.errorHandlers[matchErrorCode]
 							if errHandler != nil {
-								errHandler.ServeHTTP(w, req.WithContext(outCtx))
+								errHandler.ServeHTTP(w, resultReq.WithContext(outCtx))
 								return
 							}
 							// if generic error handler defined, call that
 							if r.ErrorHandler != nil {
-								r.ErrorHandler.ServeHTTP(w, req.WithContext(outCtx))
+								r.ErrorHandler.ServeHTTP(w, resultReq.WithContext(outCtx))
 								return
 							}
 							// return a generic http error
-							errorHandler(w, req.WithContext(outCtx), matchError, matchErrorCode)
+							errorHandler(w, resultReq.WithContext(outCtx), matchError, matchErrorCode)
 						}
 					}
 					chain.ServeHTTP(w, useReq)

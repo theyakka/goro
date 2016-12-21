@@ -28,6 +28,7 @@ type ChainResult struct {
 	Status     ChainStatus
 	Error      error
 	StatusCode int
+	Request    *http.Request
 }
 
 // Chain allows for chaining of Handlers
@@ -130,29 +131,32 @@ func (ch Chain) ThenFunc(handlerFunc http.HandlerFunc) Chain {
 }
 
 // Next - execute the next handler in the chain
-func (ch Chain) Next() {
+func (ch Chain) Next(req *http.Request) {
+	ch.request = req
 	ch.handlerIndex++
 	handlersCount := len(ch.Handlers)
 	if ch.handlerIndex < handlersCount {
 		ch.Handlers[ch.handlerIndex].Execute(ch, ch.responseWriter, ch.request)
 	}
 	if ch.handlerIndex == handlersCount {
-		result := ChainResult{Status: ChainCompleted, Error: nil}
+		result := ChainResult{Request: ch.request, Status: ChainCompleted, Error: nil}
 		ch.resultCompletedFunc(result)
 		ch.reset()
 	}
 }
 
 // Halt - halt chain execution
-func (ch Chain) Halt(haltError error) {
-	result := ChainResult{Status: ChainHalted, Error: haltError, StatusCode: http.StatusInternalServerError}
+func (ch Chain) Halt(req *http.Request, haltError error) {
+	ch.request = req
+	result := ChainResult{Request: ch.request, Status: ChainHalted, Error: haltError, StatusCode: http.StatusInternalServerError}
 	ch.resultCompletedFunc(result)
 	ch.reset()
 }
 
 // Error - halt the chain and report an error
-func (ch Chain) Error(chainError error, statusCode int) {
-	result := ChainResult{Status: ChainError, Error: chainError, StatusCode: statusCode}
+func (ch Chain) Error(req *http.Request, chainError error, statusCode int) {
+	ch.request = req
+	result := ChainResult{Request: ch.request, Status: ChainError, Error: chainError, StatusCode: statusCode}
 	ch.resultCompletedFunc(result)
 	ch.reset()
 }
