@@ -11,6 +11,7 @@ package goro
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -134,6 +135,20 @@ func (r *Router) SetMethodNotAllowedIsError(isError bool) {
 // NewMatcher returns a new matcher for the given Router
 func (r *Router) NewMatcher() *Matcher {
 	return NewMatcher(r)
+}
+
+// NewChain - returns a new chain with the current router attached
+func (r *Router) NewChain(handlers ...ChainHandler) Chain {
+	chain := NewChain(handlers...)
+	chain.router = r
+	return chain
+}
+
+// NewChainWithFuncs - returns a new chain with the current router attached
+func (r *Router) NewChainWithFuncs(handlers ...ChainHandlerFunc) Chain {
+	chain := NewChainWithFuncs(handlers...)
+	chain.router = r
+	return chain
 }
 
 // Add creates a new Route and registers the instance within the Router
@@ -275,20 +290,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 								"message":     errorMessage,
 							}
 							outCtx = context.WithValue(outCtx, ErrorValueContextKey, err)
-
-							// try to call specific error handler
-							errHandler := r.errorHandlers[matchErrorCode]
-							if errHandler != nil {
-								errHandler.ServeHTTP(w, resultReq.WithContext(outCtx))
-								return
-							}
-							// if generic error handler defined, call that
-							if r.ErrorHandler != nil {
-								r.ErrorHandler.ServeHTTP(w, resultReq.WithContext(outCtx))
-								return
-							}
-							// return a generic http error
-							errorHandler(w, resultReq.WithContext(outCtx), matchError, matchErrorCode)
+							r.emitError(
+								w,
+								resultReq.WithContext(outCtx),
+								errors.New(matchError),
+								matchErrorCode,
+							)
 						}
 					}
 					chain.ServeHTTP(w, useReq)
@@ -318,20 +325,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			"message":     matchError,
 		}
 		outCtx = context.WithValue(outCtx, ErrorValueContextKey, err)
-
-		// try to call specific error handler
-		errHandler := r.errorHandlers[matchErrorCode]
-		if errHandler != nil {
-			errHandler.ServeHTTP(w, req.WithContext(outCtx))
-			return
-		}
-		// if generic error handler defined, call that
-		if r.ErrorHandler != nil {
-			r.ErrorHandler.ServeHTTP(w, req.WithContext(outCtx))
-			return
-		}
-		// return a generic http error
-		errorHandler(w, req.WithContext(outCtx), matchError, matchErrorCode)
+		r.emitError(
+			w,
+			req.WithContext(outCtx),
+			errors.New(matchError),
+			matchErrorCode,
+		)
 	}
 }
 
@@ -359,6 +358,24 @@ func (r *Router) shouldServeStaticFile(w http.ResponseWriter, req *http.Request,
 		}
 	}
 	return false, ""
+}
+
+// error handling
+func (r *Router) emitError(w http.ResponseWriter, req *http.Request, err error, errCode int) {
+	// try to call specific error handler
+	errHandler := r.errorHandlers[errCode]
+	if errHandler != nil {
+		errHandler.ServeHTTP(w, req)
+		return
+	}
+	// if generic error handler defined, call that
+	if r.ErrorHandler != nil {
+		r.ErrorHandler.ServeHTTP(w, req)
+		return
+	}
+	// return a generic http error
+	errorHandler(w, req, err.Error(), errCode)
+
 }
 
 func errorHandler(w http.ResponseWriter, req *http.Request, errorString string, errorCode int) {
