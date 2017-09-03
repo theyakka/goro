@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -26,6 +27,24 @@ type StaticLocation struct {
 
 	// prefix is a path prefix to applied when matching
 	prefix string
+}
+
+type Group struct {
+	prefix string
+	router *Router
+}
+
+func NewGroup(prefix string, router *Router) *Group {
+	return &Group{
+		prefix: prefix,
+		router: router,
+	}
+}
+
+// Add creates a new Route and registers the instance within the Router
+func (g *Group) Add(method string, routePath string) *Route {
+	route := NewRoute(method, path.Join(g.prefix, routePath))
+	return g.router.Use(route)[0]
 }
 
 // Router is the main routing class
@@ -151,9 +170,13 @@ func (r *Router) NewChainWithFuncs(handlers ...ChainHandlerFunc) Chain {
 	return chain
 }
 
+func (r *Router) Group(prefix string) *Group {
+	return NewGroup(prefix, r)
+}
+
 // Add creates a new Route and registers the instance within the Router
-func (r *Router) Add(method string, path string) *Route {
-	route := NewRoute(method, path)
+func (r *Router) Add(method string, routePath string) *Route {
+	route := NewRoute(method, routePath)
 	return r.Use(route)[0]
 }
 
@@ -334,10 +357,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *Router) shouldServeStaticFile(w http.ResponseWriter, req *http.Request, path string) (fileExists bool, filePath string) {
+func (r *Router) shouldServeStaticFile(w http.ResponseWriter, req *http.Request, servePath string) (fileExists bool, filePath string) {
 	if r.staticLocations != nil && len(r.staticLocations) > 0 {
 		for _, staticDir := range r.staticLocations {
-			seekPath := path
+			seekPath := servePath
 			if staticDir.prefix != "" {
 				fullPrefix := staticDir.prefix
 				if !strings.HasPrefix(fullPrefix, "/") {

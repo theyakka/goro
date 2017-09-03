@@ -34,17 +34,17 @@ type TestFilter struct {
 
 func testHandler1(chain Chain, rw http.ResponseWriter, req *http.Request) {
 	log.Println("TH1")
-	chain.Next()
+	chain.Next(req)
 }
 
 func testHandler2(chain Chain, rw http.ResponseWriter, req *http.Request) {
 	log.Println("TH2")
-	chain.Next()
+	chain.Next(req)
 }
 
 func testHandler3(chain Chain, rw http.ResponseWriter, req *http.Request) {
 	log.Println("TH3")
-	chain.Next()
+	chain.Next(req)
 }
 
 func (tf TestFilter) ExecuteFilter(req **http.Request) {
@@ -94,13 +94,28 @@ func TestMain(t *testing.T) {
 		}
 	})
 
-	chain := NewChainWithFuncs(testHandler1, testHandler3, testHandler2)
-	chain = chain.AddResultCallback(func(result ChainResult) {
-		log.Println("Chain completed")
+	v2TestHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		log.Println("V2 Test handler!!")
+		calledTestHandler = true
+		ctx := req.Context()
+		finalParams = ctx.Value(ParametersContextKey).(map[string][]string)
+		catchAllObj := ctx.Value(CatchAllValueContextKey)
+		finalCatchAll = ""
+		if catchAllObj != nil {
+			finalCatchAll = catchAllObj.(string)
+		}
 	})
+
+	chain := NewChainWithFuncs(testHandler1, testHandler3, testHandler2)
 	router.BeforeChain = chain
 
 	testHandle := testHandler
+
+	v2group := router.Group("/v2")
+	v2group.Add("GET", "/_ping").Handle(v2TestHandler)
+	v2group.Add("GET", "/_status").Handle(v2TestHandler)
+	v2group.Add("GET", "/").Handle(v2TestHandler)
+	v2group.Add("GET", "/*").Handle(v2TestHandler)
 
 	router.SetStringVariable("a", "alpha$b$c")
 	router.SetStringVariable("b", "bar")
@@ -127,19 +142,24 @@ func TestMain(t *testing.T) {
 		Handle(testHandle)
 
 	reqMocks := []RequestMock{
-		RequestMock{Method: "GET", URL: "/", CheckSuccess: true},
-		RequestMock{Method: "POST", URL: "/", CheckSuccess: false},
-		RequestMock{Method: "GET", URL: "/users/123/show", CheckSuccess: true},
-		RequestMock{Method: "GET", URL: "/test/route", CheckSuccess: true},
-		RequestMock{Method: "POST", URL: "/test/route", CheckSuccess: false},
-		RequestMock{Method: "GET", URL: "/users/123/show/something", CheckSuccess: true},
-		RequestMock{Method: "GET", URL: "users/123/show/something", CheckSuccess: true},
-		RequestMock{Method: "POST", URL: "/login", CheckSuccess: true},
-		RequestMock{Method: "GET", URL: "/login", CheckSuccess: false},
-		RequestMock{Method: "GET", URL: "/something", CheckSuccess: true},
+		{Method: "GET", URL: "/", CheckSuccess: true},
+		{Method: "POST", URL: "/", CheckSuccess: false},
+		{Method: "GET", URL: "/users/123/show", CheckSuccess: true},
+		{Method: "GET", URL: "/test/route", CheckSuccess: true},
+		{Method: "POST", URL: "/test/route", CheckSuccess: false},
+		{Method: "GET", URL: "/users/123/show/something", CheckSuccess: true},
+		{Method: "GET", URL: "users/123/show/something", CheckSuccess: true},
+		{Method: "POST", URL: "/login", CheckSuccess: true},
+		{Method: "GET", URL: "/login", CheckSuccess: false},
+		{Method: "GET", URL: "/something", CheckSuccess: true},
+		{Method: "GET", URL: "/v2/_ping", CheckSuccess: true},
+		{Method: "GET", URL: "/v2/testing", CheckSuccess: true},
 	}
 
+	router.PrintRoutes()
+
 	for _, mock := range reqMocks {
+		Log("Calling:", mock.URL, "------")
 		r, _ := http.NewRequest(mock.Method, mock.URL, nil)
 		w := httptest.NewRecorder()
 		calledTestHandler = false
@@ -149,6 +169,7 @@ func TestMain(t *testing.T) {
 		if calledTestHandler != mock.CheckSuccess {
 			t.Error("*** Handler check failed for", mock.URL)
 		}
+		Log("------\n")
 	}
 
 	paramMocks := []RequestMock{
