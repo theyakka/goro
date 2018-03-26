@@ -10,12 +10,6 @@ jobs:
     steps:
       - checkout
       - run: go get -v -t -d ./...
-
-  test:
-    docker:
-      - image: circleci/golang:1.9
-    working_directory: /go/src/github.com/theyakka/goro
-    steps:
       - run: go test -v -covermode=count -coverprofile=coverage.out ./...
     post:
-      - run: bash <(curl -s https://codecov.io/bash) -f coverage.out
+      - run: bash <(curl -s https://codecov.io/bash) -f coverage.out -t $CODECOV_TOKEN
