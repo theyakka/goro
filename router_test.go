@@ -1,9 +1,9 @@
 // Goro
 //
-// Created by Posse in NYC
-// http://goposse.com
+// Created by Yakka
+// http://theyakka.com
 //
-// Copyright (c) 2016 Posse Productions LLC.
+// Copyright (c) 2018 Yakka LLC.
 // All rights reserved.
 // See the LICENSE file for licensing details and requirements.
 
