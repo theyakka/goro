@@ -9,10 +9,6 @@ jobs:
     working_directory: /go/src/github.com/theyakka/goro
     steps:
       - checkout
-      - persist_to_workspace:
-        root: /tmp/coverage
-        paths:
-          - coverage.out
       - run: go get -v -t -d ./...
-      - run: go test -v -covermode=count -coverprofile=/tmp/coverage/coverage.out ./...
+      - run: go test -v -covermode=count -coverprofile=coverage.out ./...
       - run: bash <(curl -s https://codecov.io/bash) -f coverage.out -t $CODECOV_TOKEN
