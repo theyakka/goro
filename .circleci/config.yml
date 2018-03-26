@@ -20,6 +20,6 @@ jobs:
       # specify any bash command here prefixed with `run: `
       - run: go get -v -t -d ./...
       - run: go test -v ./...
-  test:
+
     post:
       - bash <(curl -s https://codecov.io/bash)
