@@ -13,6 +13,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // RouteParamsFromContext - get the current params value from a given context
@@ -61,4 +62,21 @@ func ErrorInfoForRequest(req *http.Request) ErrorMap {
 		return errInfo.(ErrorMap)
 	}
 	return nil
+}
+
+// CleanPath - returns a path value with the following modifications:
+//	1. replaces any '\' with '/'
+//	2. replaces any '//' with '/'
+//	3. adds a leading '/' (if missing)
+func CleanPath(path string) string {
+	cleanPath := path
+	// replace any non-unix path separators
+	cleanPath = strings.Replace(cleanPath, "\\", "/", -1)
+	// replace double separators
+	cleanPath = strings.Replace(cleanPath, "//", "/", -1)
+	// add leading slash if missing
+	if !strings.HasPrefix(cleanPath, "/") {
+		cleanPath = "/" + cleanPath
+	}
+	return cleanPath
 }

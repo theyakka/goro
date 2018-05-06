@@ -254,7 +254,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	usePath := filepath.Clean(req.URL.Path)
+	usePath := CleanPath(req.URL.Path)
 	outCtx := context.WithValue(initialContext, PathContextKey, usePath)
 
 	if r.ErrorHandler != nil {
