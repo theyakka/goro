@@ -19,6 +19,8 @@ import (
 	"testing"
 )
 
+const testContextKey ContextKey = 1
+
 type RequestMock struct {
 	URL                string
 	Method             string
@@ -49,7 +51,7 @@ func testHandler3(chain Chain, rw http.ResponseWriter, req *http.Request) {
 
 func (tf TestFilter) ExecuteFilter(req **http.Request) {
 	oldReq := *req
-	newCtx := context.WithValue(oldReq.Context(), "TESTVAL", "this is a test")
+	newCtx := context.WithValue(oldReq.Context(), testContextKey, "this is a test")
 	*req = oldReq.WithContext(newCtx)
 }
 

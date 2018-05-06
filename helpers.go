@@ -47,14 +47,6 @@ func FirstStringRouteParam(params []string) string {
 	return ""
 }
 
-// FirstRouteParam - return the first item in the array if it exists, otherwise return nil
-func FirstRouteParam(params []interface{}) interface{} {
-	if params != nil && len(params) > 0 {
-		return params[0]
-	}
-	return nil
-}
-
 // ErrorInfoForRequest - returns the error info for the request (if any)
 func ErrorInfoForRequest(req *http.Request) ErrorMap {
 	errInfo := req.Context().Value(ErrorValueContextKey)

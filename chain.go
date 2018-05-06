@@ -59,8 +59,8 @@ type Chain struct {
 	resultCompletedFunc ChainCompletedFunc
 }
 
-// StepCompletedFunc - callback function executed when chain has completed
-// a step
+// ChainStepCompletedFunc - callback function executed when chain has
+// completed a step
 type ChainStepCompletedFunc func(chain Chain, result ChainResult)
 
 // ChainCompletedFunc - callback function executed when chain execution has
