@@ -8,10 +8,10 @@ import (
 // Route params tests
 func readyContext() context.Context {
 	paramsMap := map[string][]string{
-		"id":        []string{"255"},
-		"colors":    []string{"red", "green", "blue"},
-		"names":     []string{"John Smith"},
-		"positions": []string{"left", "topwise", "other right"},
+		"id":        {"255"},
+		"colors":    {"red", "green", "blue"},
+		"names":     {"John Smith"},
+		"positions": {"left", "topwise", "other right"},
 	}
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, ParametersContextKey, paramsMap)

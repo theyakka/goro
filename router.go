@@ -29,11 +29,15 @@ type StaticLocation struct {
 	prefix string
 }
 
+// Group allows you to easily prefix (or group) routes in a
+// hierarchical fashion. e.g.: a group for version 1 of an
+// API could be represented as `router.Group("/v1")`.
 type Group struct {
 	prefix string
 	router *Router
 }
 
+// NewGroup creates a new route group
 func NewGroup(prefix string, router *Router) *Group {
 	return &Group{
 		prefix: prefix,
@@ -170,6 +174,7 @@ func (r *Router) NewChainWithFuncs(handlers ...ChainHandlerFunc) Chain {
 	return chain
 }
 
+// Group creates a new router group
 func (r *Router) Group(prefix string) *Group {
 	return NewGroup(prefix, r)
 }
