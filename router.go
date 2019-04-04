@@ -47,6 +47,22 @@ func (g *Group) Add(method string, routePath string) *Route {
 	return g.router.Use(route)[0]
 }
 
+// Add creates a new Route using the GET method and registers the instance within the Router
+func (g *Group) GET(routePath string) *Route {
+	return g.Add("GET", routePath)
+}
+
+// Add creates a new Route using the POST method and registers the instance within the Router
+func (g *Group) POST(routePath string) *Route {
+	return g.Add("POST", routePath)
+}
+
+// Add creates a new Route using the PUT method and registers the instance within the Router
+func (g *Group) PUT(routePath string) *Route {
+	return g.Add("PUT", routePath)
+}
+
+
 // Router is the main routing class
 type Router struct {
 
@@ -178,6 +194,21 @@ func (r *Router) Group(prefix string) *Group {
 func (r *Router) Add(method string, routePath string) *Route {
 	route := NewRoute(method, routePath)
 	return r.Use(route)[0]
+}
+
+// Add creates a new Route using the GET method and registers the instance within the Router
+func (r *Router) GET(routePath string) *Route {
+	return r.Add("GET", routePath)
+}
+
+// Add creates a new Route using the POST method and registers the instance within the Router
+func (r *Router) POST(routePath string) *Route {
+	return r.Add("POST", routePath)
+}
+
+// Add creates a new Route using the PUT method and registers the instance within the Router
+func (r *Router) PUT(routePath string) *Route {
+	return r.Add("PUT", routePath)
 }
 
 // Use registers one or more Route instances within the Router

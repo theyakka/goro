@@ -23,8 +23,7 @@ Goro is LOADED with features, but no bloat.
 
 # Installing
 
-**Goro requires Go 1.7+.** Goro requires the new `Context` functionality of the Go `1.7`
-standard library. Its an inconvenience but its a great base for the future.
+**Goro requires Go 1.7+.** We recommend using the latest version of Go if you can.
 
 To install, run:
 
