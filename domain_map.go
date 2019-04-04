@@ -3,7 +3,7 @@
 // Created by Yakka
 // http://theyakka.com
 //
-// Copyright (c) 2018 Yakka LLC.
+// Copyright (c) 2019 Yakka LLC.
 // All rights reserved.
 // See the LICENSE file for licensing details and requirements.
 
