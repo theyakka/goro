@@ -15,8 +15,8 @@ import (
 	"os"
 )
 
-// ErrorMap - a map type used for routing error information
-type ErrorMap map[string]interface{}
+// ContextHandler - the standard Goro handler
+type ContextHandler func(ctx *HandlerContext)
 
 // logger - shared logger instance
 var logger *log.Logger
@@ -37,18 +37,7 @@ const (
 	ComponentTypeCatchAll
 )
 
-const (
-	// HTTPMethodGET - GET http method
-	HTTPMethodGET string = "GET"
-	// HTTPMethodPOST - POST http method
-	HTTPMethodPOST string = "POST"
-	// HTTPMethodPUT - PUT http method
-	HTTPMethodPUT string = "PUT"
-	// HTTPMethodDELETE - DELETE http method
-	HTTPMethodDELETE string = "DELETE"
-)
-
-// DebugLevel - debug information output level
+// DebugLevel - Debug information output level
 type DebugLevel int
 
 const (

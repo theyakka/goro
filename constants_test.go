@@ -8,3 +8,5 @@
 // See the LICENSE file for licensing details and requirements.
 
 package goro_test
+
+const printDebug = true

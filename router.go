@@ -10,64 +10,20 @@
 package goro
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 )
-
-// StaticLocation is a holder for static location information
-type StaticLocation struct {
-	// root is the root (source) location
-	root string
-
-	// prefix is a path prefix to applied when matching
-	prefix string
-}
-
-type Group struct {
-	prefix string
-	router *Router
-}
-
-func NewGroup(prefix string, router *Router) *Group {
-	return &Group{
-		prefix: prefix,
-		router: router,
-	}
-}
-
-// Add creates a new Route and registers the instance within the Router
-func (g *Group) Add(method string, routePath string) *Route {
-	route := NewRoute(method, path.Join(g.prefix, routePath))
-	return g.router.Use(route)[0]
-}
-
-// Add creates a new Route using the GET method and registers the instance within the Router
-func (g *Group) GET(routePath string) *Route {
-	return g.Add("GET", routePath)
-}
-
-// Add creates a new Route using the POST method and registers the instance within the Router
-func (g *Group) POST(routePath string) *Route {
-	return g.Add("POST", routePath)
-}
-
-// Add creates a new Route using the PUT method and registers the instance within the Router
-func (g *Group) PUT(routePath string) *Route {
-	return g.Add("PUT", routePath)
-}
-
 
 // Router is the main routing class
 type Router struct {
 
-	// ErrorHandler - generic error handler
-	ErrorHandler http.Handler
+	// errorHandler - generic error handler
+	errorHandler ContextHandler
 
 	// ShouldCacheMatchedRoutes - if true then any matched routes should be cached
 	// according to the path they were matched to
@@ -83,14 +39,14 @@ type Router struct {
 	methodNotAllowedIsError bool
 
 	// BeforeChain - a Chain of handlers that will always be executed before the Route handler
-	BeforeChain Chain
+	//BeforeChain Chain
 
 	// errorHandlers - map status codes to specific handlers
-	errorHandlers map[int]http.Handler
+	errorHandlers map[int]ContextHandler
 
 	// globalHandlers - handlers that will match all requests for an HTTP method regardless
 	// of route matching
-	globalHandlers map[string]http.Handler
+	globalHandlers map[string]ContextHandler
 
 	staticLocations []StaticLocation
 
@@ -116,15 +72,15 @@ type Router struct {
 // NewRouter - creates a new default instance of the Router type
 func NewRouter() *Router {
 	router := &Router{
-		ErrorHandler:             nil,
+		errorHandler:             nil,
 		ShouldCacheMatchedRoutes: true,
 		alwaysUseFirstMatch:      false,
 		methodNotAllowedIsError:  true,
-		errorHandlers:            map[int]http.Handler{},
-		globalHandlers:           map[string]http.Handler{},
+		errorHandlers:            map[int]ContextHandler{},
+		globalHandlers:           map[string]ContextHandler{},
 		staticLocations:          []StaticLocation{},
 		filters:                  nil,
-		routes:                   &Tree{},
+		routes:                   NewTree(),
 		variables:                map[string]string{},
 		cache:                    NewRouteCache(),
 		debugLevel:               DebugLevelNone,
@@ -137,7 +93,7 @@ func NewRouter() *Router {
 	return router
 }
 
-// SetDebugLevel - enables or disables debug mode
+// SetDebugLevel - enables or disables Debug mode
 func (r *Router) SetDebugLevel(debugLevel DebugLevel) {
 	debugTimingsOn := debugLevel == DebugLevelTimings
 	debugFullOn := debugLevel == DebugLevelFull
@@ -179,13 +135,6 @@ func (r *Router) NewChain(handlers ...ChainHandler) Chain {
 	return chain
 }
 
-// NewChainWithFuncs - returns a new chain with the current router attached
-func (r *Router) NewChainWithFuncs(handlers ...ChainHandlerFunc) Chain {
-	chain := NewChainWithFuncs(handlers...)
-	chain.router = r
-	return chain
-}
-
 func (r *Router) Group(prefix string) *Group {
 	return NewGroup(prefix, r)
 }
@@ -194,6 +143,10 @@ func (r *Router) Group(prefix string) *Group {
 func (r *Router) Add(method string, routePath string) *Route {
 	route := NewRoute(method, routePath)
 	return r.Use(route)[0]
+}
+
+func (r *Router) AddBundle(bundle Bundle) {
+	//processBundle(bundle)
 }
 
 // Add creates a new Route using the GET method and registers the instance within the Router
@@ -235,23 +188,19 @@ func (r *Router) AddStaticWithPrefix(staticRoot string, prefix string) {
 }
 
 // SetGlobalHandler configures a ContextHandler to handle all requests for a given method
-func (r *Router) SetGlobalHandler(method string, handler http.Handler) {
+func (r *Router) SetGlobalHandler(method string, handler ContextHandler) {
 	r.globalHandlers[strings.ToUpper(method)] = handler
 }
 
-// SetGlobalHandlerFunc configures a ContextHandlerFunc to handle all requests for a given method
-func (r *Router) SetGlobalHandlerFunc(method string, handlerFunc http.HandlerFunc) {
-	r.SetGlobalHandler(method, http.Handler(handlerFunc))
+// SetRouterErrorHandler configures a ContextHandler to handle all general router errors
+// (i.e.: non-network related)
+func (r *Router) SetRouterErrorHandler(handler ContextHandler) {
+	r.errorHandler = handler
 }
 
 // SetErrorHandler configures a ContextHandler to handle all errors for the supplied status code
-func (r *Router) SetErrorHandler(statusCode int, handler http.Handler) {
+func (r *Router) SetErrorHandler(statusCode int, handler ContextHandler) {
 	r.errorHandlers[statusCode] = handler
-}
-
-// SetErrorHandlerFunc configures a ContextHandlerFunc to handle all errors for the supplied status code
-func (r *Router) SetErrorHandlerFunc(statusCode int, handler http.HandlerFunc) {
-	r.SetErrorHandler(statusCode, http.Handler(handler))
 }
 
 // AddFilter adds a filter to the list of pre-process filters
@@ -269,123 +218,68 @@ func (r *Router) SetStringVariable(variable string, value string) {
 }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-
-	method := strings.ToUpper(req.Method)
-	initialContext := req.Context()
-	if initialContext == nil {
-		initialContext = context.Background()
+	// create the context we're going to use for the request lifecycle
+	respWriter := NewCheckedResponseWriter(w)
+	hContext := NewHandlerContext(req, respWriter, r)
+	if r.errorHandler != nil {
+		defer r.recoverPanic(hContext)
 	}
-
-	if r.filters != nil {
+	// execute all the filters
+	if r.filters != nil && len(r.filters) > 0 {
 		for _, filter := range r.filters {
-			originalReq := req.WithContext(initialContext)
-			filter.ExecuteFilter(&originalReq)
-			req = originalReq
-			initialContext = req.Context() // update the working context so we can pass it along
+			filter.ExecuteBefore(hContext)
 		}
 	}
-
-	usePath := CleanPath(req.URL.Path)
-	outCtx := context.WithValue(initialContext, PathContextKey, usePath)
-
-	if r.ErrorHandler != nil {
-		defer r.recoverPanic(outCtx, w, req)
-	}
-
-	// check to see if a global handler has been registered for the method
+	// prepare the request info
+	callingRequest := hContext.Request
+	method := strings.ToUpper(callingRequest.Method)
+	cleanPath := CleanPath(callingRequest.URL.Path)
+	hContext.Path = cleanPath
+	// check if there is a global handler. if so use that and be done.
 	globalHandler := r.globalHandlers[method]
 	if globalHandler != nil {
-		globalHandler.ServeHTTP(w, req.WithContext(outCtx))
+		globalHandler(hContext)
 		return
 	}
-
-	// check to see if we have a matching route
-	matchError := ""
-	matchErrorCode := 0
-	match := r.routeMatcher.MatchPathToRoute(method, usePath, req)
-	if match != nil && len(match.Node.routes) > 0 {
-		route := match.Node.RouteForMethod(method)
-		if route != nil {
-			if match.Node.nodeType == ComponentTypeCatchAll {
-				// check to see if we should serve a static file at that location before falling
-				// through to the catch all
-				fileExists, filename := r.shouldServeStaticFile(w, req, usePath)
-				if fileExists {
-					http.ServeFile(w, req, filename)
-					return
-				}
-			}
-			handler := route.Handler
-			if handler != nil {
-				outCtx = context.WithValue(outCtx, ParametersContextKey, match.Params)
-				if match.CatchAllValue != "" {
-					outCtx = context.WithValue(outCtx, CatchAllValueContextKey, match.CatchAllValue)
-				}
-				useReq := req.WithContext(outCtx)
-				if len(r.BeforeChain.Handlers) > 0 {
-					chain := r.BeforeChain
-					chain.resultCompletedFunc = func(result ChainResult) {
-						resultReq := result.Request
-						if result.Status == ChainCompleted {
-							handler.ServeHTTP(w, resultReq)
-						} else {
-							// TODO - make this block of code generic
-							statusCode := result.StatusCode
-							if statusCode == 0 {
-								statusCode = http.StatusInternalServerError
-							}
-							errorMessage := "Server execution failed"
-							if result.Error != nil {
-								errorMessage = result.Error.Error()
-							}
-							err := ErrorMap{
-								"code":        RouterErrorCode(result.Status),
-								"status_code": statusCode,
-								"message":     errorMessage,
-							}
-							outCtx = context.WithValue(outCtx, ErrorValueContextKey, err)
-							r.emitError(
-								w,
-								resultReq.WithContext(outCtx),
-								errors.New(matchError),
-								matchErrorCode,
-							)
-						}
-					}
-					chain.ServeHTTP(w, useReq)
-				} else {
-					handler.ServeHTTP(w, useReq)
-				}
-				return
-			}
-		} else {
-			matchError = "Method Not Allowed"
-			matchErrorCode = http.StatusMethodNotAllowed
-		}
-	} else {
-		fileExists, filename := r.shouldServeStaticFile(w, req, usePath)
+	// check to see if there is a matching route
+	match := r.routeMatcher.MatchPathToRoute(method, cleanPath, callingRequest)
+	if match == nil || len(match.Node.routes) == 0 {
+		// check to see if there is a file match
+		fileExists, filename := r.shouldServeStaticFile(respWriter, req, cleanPath)
 		if fileExists {
-			http.ServeFile(w, req, filename)
+			ServeFile(hContext, filename, http.StatusOK)
 			return
 		}
-		matchError = "Not Found"
-		matchErrorCode = http.StatusNotFound
+		// no match
+		r.emitError(hContext, "Not Found", http.StatusNotFound)
+		return
 	}
-
-	if matchErrorCode != 0 {
-		err := ErrorMap{
-			"code":        matchErrorCode,
-			"status_code": matchErrorCode,
-			"message":     matchError,
+	route := match.Node.RouteForMethod(method)
+	if route == nil {
+		// method not allowed
+		r.emitError(hContext, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if match.Node.nodeType == ComponentTypeCatchAll {
+		// check to see if we should serve a static file at that location before falling
+		// through to the catch all
+		fileExists, filename := r.shouldServeStaticFile(respWriter, req, cleanPath)
+		if fileExists {
+			ServeFile(hContext, filename, http.StatusOK)
+			return
 		}
-		outCtx = context.WithValue(outCtx, ErrorValueContextKey, err)
-		r.emitError(
-			w,
-			req.WithContext(outCtx),
-			errors.New(matchError),
-			matchErrorCode,
-		)
 	}
+	handler := route.Handler
+	if handler == nil {
+		r.emitError(hContext, "No Handler defined", http.StatusInternalServerError)
+		return
+	}
+	hContext.Parameters = NewParametersWithMap(match.Params)
+	if match.CatchAllValue != "" {
+		hContext.CatchAllValue = match.CatchAllValue
+	}
+	handler(hContext)
+	r.executePostFilters(hContext)
 }
 
 func (r *Router) shouldServeStaticFile(w http.ResponseWriter, req *http.Request, servePath string) (fileExists bool, filePath string) {
@@ -415,46 +309,75 @@ func (r *Router) shouldServeStaticFile(w http.ResponseWriter, req *http.Request,
 }
 
 // error handling
-func (r *Router) emitError(w http.ResponseWriter, req *http.Request, err error, errCode int) {
+func (r *Router) emitError(context *HandlerContext, errMessage string, statusCode int) {
+	routingError := RoutingError{
+		StatusCode: statusCode,
+		Message:    errMessage,
+		ErrorCode:  0,
+		Error:      nil,
+	}
+	context.Errors = append(context.Errors, routingError)
 	// try to call specific error handler
-	errHandler := r.errorHandlers[errCode]
+	errHandler := r.errorHandlers[statusCode]
 	if errHandler != nil {
-		errHandler.ServeHTTP(w, req)
+		errHandler(context)
+		r.executePostFilters(context)
 		return
 	}
 	// if generic error handler defined, call that
-	if r.ErrorHandler != nil {
-		r.ErrorHandler.ServeHTTP(w, req)
+	if r.errorHandler != nil {
+		r.errorHandler(context)
+		r.executePostFilters(context)
 		return
 	}
 	// return a generic http error
-	errorHandler(w, req, err.Error(), errCode)
-
+	errorHandler(context.ResponseWriter, context.Request,
+		errMessage, statusCode)
+	r.executePostFilters(context)
 }
 
-func errorHandler(w http.ResponseWriter, req *http.Request, errorString string, errorCode int) {
-	http.Error(w, errorString, errorCode)
+func (r *Router) executePostFilters(ctx *HandlerContext) {
+	hasDonePost := ctx.internalState[StateKeyHasExecutedPostFilters]
+	if hasDonePost == nil {
+		if r.filters != nil && len(r.filters) > 0 {
+			for _, filter := range r.filters {
+				filter.ExecuteAfter(ctx)
+			}
+		}
+		ctx.internalState[StateKeyHasExecutedPostFilters] = true
+	}
 }
 
-func (r *Router) recoverPanic(ctx context.Context, w http.ResponseWriter, req *http.Request) {
+func errorHandler(w http.ResponseWriter, _ *http.Request, errorString string, statusCode int) {
+	http.Error(w, errorString, statusCode)
+}
+
+func (r *Router) recoverPanic(handlerContext *HandlerContext) {
 	if panicRecover := recover(); panicRecover != nil {
 		var message string
+		var err error
 		switch panicRecover.(type) {
 		case error:
-			message = panicRecover.(error).Error()
+			err = panicRecover.(error)
+			message = err.Error()
 		case string:
 			message = panicRecover.(string)
+			err = errors.New(message)
 		default:
 			message = "Panic! Please check the 'error' value for details"
+			err = errors.New(message)
 		}
-		err := ErrorMap{
-			"code":        ErrorCodePanic,
-			"status_code": http.StatusInternalServerError,
-			"message":     message,
-			"error":       panicRecover,
+		routingErr := RoutingError{
+			ErrorCode:  ErrorCodePanic,
+			StatusCode: http.StatusInternalServerError,
+			Message:    message,
+			Error:      err,
+			Info: ErrorInfoMap{
+				"stack": debug.Stack(),
+			},
 		}
-		outCtx := context.WithValue(ctx, ErrorValueContextKey, err)
-		r.ErrorHandler.ServeHTTP(w, req.WithContext(outCtx))
+		handlerContext.Errors = append(handlerContext.Errors, routingErr)
+		r.errorHandler(handlerContext)
 	}
 }
 
