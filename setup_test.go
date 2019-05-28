@@ -68,9 +68,9 @@ func expectHitResult(t *testing.T, handler http.Handler, method string, path str
 
 func expectNotHitResult(t *testing.T, handler http.Handler, method string, path string) {
 	Debug("Requesting", path, "...")
-	execMockRequest(router, method, path)
+	execMockRequest(handler, method, path)
 	if wasHit {
-		t.Error("Expected", path, "to be NOT HIT but it wasn't")
+		t.Error("Expected", path, "to be NOT HIT but it was")
 	}
 	resetState()
 }

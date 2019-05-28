@@ -12,19 +12,22 @@ package goro
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
 const DomainMapNakedSubdomainKey = ":naked"
 const DomainMapWildcardSubdomainKey = ":wildcard"
 
+var domainCheckRegexp *regexp.Regexp
+
 // DomainMap - maps (sub)domains to routers
 type DomainMap struct {
-	domains     []string
-	subdomains  []string
-	routerMap   map[string]*Router
-	hostMatches []string
-	hasWildcard bool
+	domains              []string
+	subdomains           []string
+	routerMap            map[string]*Router
+	subdomainHostMatches map[string]string
+	hasWildcard          bool
 
 	// NotFoundHandler - if the (sub)domain is not mapped, call this handler
 	NotFoundHandler ContextHandler
@@ -32,11 +35,19 @@ type DomainMap struct {
 
 // NewDomainMap - creates a new domain map for the provided domains
 func NewDomainMap(domains ...string) *DomainMap {
+	joinedDomains := strings.Join(domains, "|")
+	domainCheckPattern := fmt.Sprintf(`^((?:[a-z0-9]{0,69}\.)*)(?:%s)(?::\d+)?$`, joinedDomains)
+	regex, regexErr := regexp.Compile(domainCheckPattern)
+	if regexErr != nil {
+		// TODO ..
+	}
+	domainCheckRegexp = regex
 	return &DomainMap{
-		domains:     domains,
-		subdomains:  []string{},
-		routerMap:   map[string]*Router{},
-		hasWildcard: false,
+		domains:              domains,
+		subdomains:           []string{},
+		routerMap:            map[string]*Router{},
+		subdomainHostMatches: map[string]string{},
+		hasWildcard:          false,
 	}
 }
 
@@ -84,10 +95,11 @@ func (dm *DomainMap) AddRouter(subdomain string, router *Router) {
 
 func (dm *DomainMap) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var router *Router
-	subdomain, isMapped := dm.isMappedHost(req.Host)
+	hostMinusPort := strings.Split(req.Host, ":")[0]
+	subdomain, isMapped := dm.isMappedHost(hostMinusPort)
 	if isMapped {
 		router = dm.routerMap[subdomain]
-	} else if dm.isNakedHost(req.Host) {
+	} else if dm.isNakedHost(hostMinusPort) {
 		router = dm.routerMap[DomainMapNakedSubdomainKey]
 	} else if dm.hasWildcard {
 		router = dm.routerMap[DomainMapWildcardSubdomainKey]
@@ -105,18 +117,20 @@ func (dm *DomainMap) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func (dm DomainMap) isMappedHost(host string) (string, bool) {
-	//for _, domainString := range dm.hostMatches {
-	//	if domainString == host {
-	//		return true
-	//	}
-	//}
-	for _, domain := range dm.domains {
-		for _, subdomain := range dm.subdomains {
-			joinedDomain := fmt.Sprintf("%s.%s", subdomain, domain)
-			if joinedDomain == host {
-				//dm.hostMatches = append(dm.hostMatches, host)
-				return subdomain, true
-			}
+	for hostString, subdomain := range dm.subdomainHostMatches {
+		if hostString == host {
+			return subdomain, true
+		}
+	}
+	matches := domainCheckRegexp.FindStringSubmatch(host)
+	if len(matches) <= 1 {
+		return "", false // naked domain or bad domain
+	}
+	subdomainMatch := strings.TrimRight(matches[1], ".")
+	for _, subdomain := range dm.subdomains {
+		if subdomain == subdomainMatch {
+			dm.subdomainHostMatches[host] = subdomain
+			return subdomain, true
 		}
 	}
 	return "", false
