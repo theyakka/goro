@@ -102,7 +102,7 @@ func (ch Chain) Then(handler ContextHandler) ContextHandler {
 // Call - calls the chain
 func (ch Chain) Call() ContextHandler {
 	return func(ctx *HandlerContext) {
-		cChain := copyChain(ch)
+		cChain := ch.Copy()
 		cChain.startChain(ctx)
 	}
 }
