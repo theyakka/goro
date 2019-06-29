@@ -27,7 +27,9 @@ func TestMain(m *testing.M) {
 
 	chainHandlers := []goro.ChainHandler{chainHandler1, chainHandler2, chainHandler3}
 	haltHandlers := []goro.ChainHandler{chainHandler1, chainHandler2, testHaltHandler, chainHandler3}
+	chainErrorHandlers := []goro.ChainHandler{chainHandler1, chainHandler2, testErrorChainHandler, chainHandler3}
 
+	router.SetErrorHandler(777, chainCustomErrorHandler)
 	router.SetStringVariable("color", "blue")
 	// router tests
 	router.GET("/").Handle(testHandler)
@@ -43,9 +45,10 @@ func TestMain(m *testing.M) {
 	apiDocsGroup := v1Group.Group("/docs")
 	apiDocsGroup.GET("/stats").Handle(testHandler)
 	// chain tests
-	router.GET("/chain/simple").Handle(goro.HC(chainHandlers...).Call())
-	router.GET("/chain/then").Handle(goro.HC(chainHandlers...).Then(testThenHandler))
-	router.GET("/chain/halt").Handle(goro.HC(haltHandlers...).Call())
+	router.GET("/chain/simple").Handle(router.HC(chainHandlers...).Call())
+	router.GET("/chain/then").Handle(router.HC(chainHandlers...).Then(testThenHandler))
+	router.GET("/chain/halt").Handle(router.HC(haltHandlers...).Call())
+	router.GET("/chain/error").Handle(router.HC(chainErrorHandlers...).Then(testThenHandler))
 	if printDebug {
 		router.PrintRoutes()
 	}

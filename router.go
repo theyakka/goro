@@ -130,11 +130,16 @@ func (r *Router) NewMatcher() *Matcher {
 
 // NewChain - returns a new chain with the current router attached
 func (r *Router) NewChain(handlers ...ChainHandler) Chain {
-	chain := NewChain(handlers...)
-	chain.router = r
-	return chain
+	return NewChain(r, handlers...)
 }
 
+// HC is syntactic sugar for NewChain
+func (r *Router) HC(handlers ...ChainHandler) Chain {
+	return NewChain(r, handlers...)
+}
+
+// Group creates a logical grouping point for a collection of routes.
+// All routes under the group will have the group prefix appended to them.
 func (r *Router) Group(prefix string) *Group {
 	return NewGroup(prefix, r)
 }

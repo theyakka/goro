@@ -10,6 +10,7 @@
 package goro_test
 
 import (
+	"errors"
 	"github.com/theyakka/goro"
 	"testing"
 )
@@ -63,6 +64,17 @@ func TestHaltChain(t *testing.T) {
 	resetState()
 }
 
+func TestErrorChain(t *testing.T) {
+	path := "/chain/error"
+	Debug("Requesting", path, "...")
+	execMockRequest(router, "GET", path)
+	expectedSum := 777
+	if sum != expectedSum {
+		t.Error("Expected a sum of", expectedSum, "but got", sum)
+	}
+	resetState()
+}
+
 func testThenHandler(_ *goro.HandlerContext) {
 	Debug("Chain hit then")
 	sum += 10
@@ -89,4 +101,14 @@ func chainHandler3(ch *goro.Chain, ctx *goro.HandlerContext) {
 func testHaltHandler(ch *goro.Chain, ctx *goro.HandlerContext) {
 	Debug("Chain hit halt")
 	ch.Halt(ctx)
+}
+
+func testErrorChainHandler(ch *goro.Chain, ctx *goro.HandlerContext) {
+	Debug("Chain error hit")
+	ch.Error(ctx, errors.New("the chain hit an error"), 777)
+}
+
+func chainCustomErrorHandler(ctx *goro.HandlerContext) {
+	Debug("Error handler hit")
+	sum = 777
 }

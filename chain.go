@@ -62,20 +62,17 @@ type Chain struct {
 }
 
 // NewChain - creates a new Chain instance
-func NewChain(handlers ...ChainHandler) Chain {
+func NewChain(router *Router, handlers ...ChainHandler) Chain {
 	return Chain{
 		RouterCatchesErrors: true,
 		EmitHTTPError:       true,
 		handlers:            handlers,
+		router:              router,
 	}
 }
 
-func HC(handlers ...ChainHandler) Chain {
-	return Chain{
-		RouterCatchesErrors: true,
-		EmitHTTPError:       true,
-		handlers:            handlers,
-	}
+func HC(router *Router, handlers ...ChainHandler) Chain {
+	return NewChain(router, handlers...)
 }
 
 // Append - returns a new chain with the ChainHandler appended to
@@ -92,10 +89,12 @@ func (ch *Chain) Append(handlers ...ChainHandler) Chain {
 // Then - calls the chain and then the designated Handler
 func (ch Chain) Then(handler ContextHandler) ContextHandler {
 	return func(ctx *HandlerContext) {
-		ch.completedCallback = func(result ChainResult) {
-			handler(ctx)
+		cChain := ch.Copy()
+		cChain.completedCallback = func(result ChainResult) {
+			if result.Status != ChainError {
+				handler(ctx)
+			}
 		}
-		cChain := copyChain(ch)
 		cChain.startChain(ctx)
 	}
 }
