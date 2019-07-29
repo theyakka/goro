@@ -140,7 +140,7 @@ func (ch *Chain) Halt(ctx *HandlerContext) {
 func (ch *Chain) Error(ctx *HandlerContext, chainError error, statusCode int) {
 	finish(ch, ctx, ChainError, chainError, statusCode)
 	if ch.router != nil && ch.RouterCatchesErrors {
-		ch.router.emitError(ctx, chainError.Error(), statusCode)
+		ch.router.emitError(ctx, statusCode, chainError.Error(), ChainHadError, chainError)
 	} else if ch.EmitHTTPError {
 		http.Error(ctx.ResponseWriter, chainError.Error(), statusCode)
 	}

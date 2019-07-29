@@ -33,3 +33,6 @@ func IsEmptyRoutingError(re RoutingError) bool {
 	return re.StatusCode == 0 && re.Message == "" && re.Info == nil &&
 		re.ErrorCode == 0 && re.Error == nil
 }
+
+const RouterError RouterErrorCode = 9101
+const ChainHadError RouterErrorCode = 9201

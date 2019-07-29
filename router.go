@@ -256,13 +256,13 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		// no match
-		r.emitError(hContext, "Not Found", http.StatusNotFound)
+		r.emitError(hContext, http.StatusNotFound, "Not Found", RouterError, nil)
 		return
 	}
 	route := match.Node.RouteForMethod(method)
 	if route == nil {
 		// method not allowed
-		r.emitError(hContext, "Method Not Allowed", http.StatusMethodNotAllowed)
+		r.emitError(hContext, http.StatusMethodNotAllowed, "Method Not Allowed", RouterError, nil)
 		return
 	}
 	if match.Node.nodeType == ComponentTypeCatchAll {
@@ -276,7 +276,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	handler := route.Handler
 	if handler == nil {
-		r.emitError(hContext, "No Handler defined", http.StatusInternalServerError)
+		r.emitError(hContext, http.StatusInternalServerError, "No Handler defined", RouterError, nil)
 		return
 	}
 	hContext.Parameters = NewParametersWithMap(match.Params)
@@ -314,12 +314,12 @@ func (r *Router) shouldServeStaticFile(w http.ResponseWriter, req *http.Request,
 }
 
 // error handling
-func (r *Router) emitError(context *HandlerContext, errMessage string, statusCode int) {
+func (r *Router) emitError(context *HandlerContext, statusCode int, errMessage string, errCode RouterErrorCode, originalErr error) {
 	routingError := RoutingError{
 		StatusCode: statusCode,
 		Message:    errMessage,
-		ErrorCode:  0,
-		Error:      nil,
+		ErrorCode:  errCode,
+		Error:      originalErr,
 	}
 	context.Errors = append(context.Errors, routingError)
 	// try to call specific error handler
