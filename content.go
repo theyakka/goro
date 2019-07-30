@@ -35,7 +35,7 @@ func ServeFile(ctx *HandlerContext, filename string, statusCode int) {
 	req := ctx.Request
 	if containsDotDotSegment(req.URL.Path) {
 		// respond with an error because the url path cannot contain '..'
-		router.emitError(ctx, "the request path cannot contain a '..' segment", http.StatusBadRequest)
+		router.emitError(ctx, http.StatusBadRequest, "the request path cannot contain a '..' segment", RouterContentErrorCode, nil)
 		return
 	}
 	// try to open the file
@@ -44,10 +44,10 @@ func ServeFile(ctx *HandlerContext, filename string, statusCode int) {
 	file, fileErr := dir.Open(filePart)
 	if fileErr != nil {
 		if os.IsNotExist(fileErr) {
-			router.emitError(ctx, "the file you requested to serve was not found", http.StatusNotFound)
+			router.emitError(ctx, http.StatusNotFound, "the file you requested to serve was not found", RouterContentErrorCode, fileErr)
 			return
 		}
-		router.emitError(ctx, fileErr.Error(), http.StatusInternalServerError)
+		router.emitError(ctx, http.StatusInternalServerError, fileErr.Error(), RouterContentErrorCode, fileErr)
 		return
 	}
 	// if the file close operation fails we just log the error to debug
@@ -60,7 +60,7 @@ func ServeFile(ctx *HandlerContext, filename string, statusCode int) {
 	// check the file exists
 	fileInfo, statErr := file.Stat()
 	if statErr != nil {
-		router.emitError(ctx, statErr.Error(), http.StatusInternalServerError)
+		router.emitError(ctx, http.StatusInternalServerError, statErr.Error(), RouterContentErrorCode, statErr)
 		return
 	}
 	// serve the file

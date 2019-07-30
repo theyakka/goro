@@ -34,5 +34,11 @@ func IsEmptyRoutingError(re RoutingError) bool {
 		re.ErrorCode == 0 && re.Error == nil
 }
 
-const RouterError RouterErrorCode = 9101
-const ChainHadError RouterErrorCode = 9201
+const (
+	// RouterError - a non-specific router error
+	RouterGenericErrorCode RouterErrorCode = 1 << iota
+	// RouterContentError - a router static content error
+	RouterContentErrorCode
+	// ChainHadError - a router chain dispatched an error
+	ChainGenericErrorCode
+)

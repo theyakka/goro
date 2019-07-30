@@ -256,13 +256,13 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		// no match
-		r.emitError(hContext, http.StatusNotFound, "Not Found", RouterError, nil)
+		r.emitError(hContext, http.StatusNotFound, "Not Found", RouterGenericErrorCode, nil)
 		return
 	}
 	route := match.Node.RouteForMethod(method)
 	if route == nil {
 		// method not allowed
-		r.emitError(hContext, http.StatusMethodNotAllowed, "Method Not Allowed", RouterError, nil)
+		r.emitError(hContext, http.StatusMethodNotAllowed, "Method Not Allowed", RouterGenericErrorCode, nil)
 		return
 	}
 	if match.Node.nodeType == ComponentTypeCatchAll {
@@ -276,7 +276,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	handler := route.Handler
 	if handler == nil {
-		r.emitError(hContext, http.StatusInternalServerError, "No Handler defined", RouterError, nil)
+		r.emitError(hContext, http.StatusInternalServerError, "No Handler defined", RouterGenericErrorCode, nil)
 		return
 	}
 	hContext.Parameters = NewParametersWithMap(match.Params)
