@@ -57,8 +57,14 @@ func NewRouteWithMeta(method string, path string, meta map[string]interface{}) *
 }
 
 // Handle adds a ContextHandler to the Route
-func (rte *Route) Handle(handler ContextHandler) *Route {
-	rte.Handler = handler
+func (rte *Route) Handle(handlerFunc ContextHandler) *Route {
+	rte.Handler = handlerFunc
+	return rte
+}
+
+// HandleFunc adds a ContextHandlerFunc to the Route
+func (rte *Route) HandleFunc(handlerFunc ContextHandlerFunc) *Route {
+	rte.Handler = handlerFunc
 	return rte
 }
 

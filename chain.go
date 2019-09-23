@@ -87,7 +87,7 @@ func (ch *Chain) Append(handlers ...ChainHandler) Chain {
 }
 
 // Then - calls the chain and then the designated Handler
-func (ch Chain) Then(handler ContextHandler) ContextHandler {
+func (ch Chain) Then(handler ContextHandlerFunc) ContextHandlerFunc {
 	return func(ctx *HandlerContext) {
 		cChain := ch.Copy()
 		cChain.completedCallback = func(result ChainResult) {
@@ -100,7 +100,7 @@ func (ch Chain) Then(handler ContextHandler) ContextHandler {
 }
 
 // Call - calls the chain
-func (ch Chain) Call() ContextHandler {
+func (ch Chain) Call() ContextHandlerFunc {
 	return func(ctx *HandlerContext) {
 		cChain := ch.Copy()
 		cChain.startChain(ctx)

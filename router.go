@@ -243,7 +243,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// check if there is a global handler. if so use that and be done.
 	globalHandler := r.globalHandlers[method]
 	if globalHandler != nil {
-		globalHandler(hContext)
+		globalHandler.Serve(hContext)
 		return
 	}
 	// check to see if there is a matching route
@@ -253,6 +253,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		fileExists, filename := r.shouldServeStaticFile(respWriter, req, cleanPath)
 		if fileExists {
 			ServeFile(hContext, filename, http.StatusOK)
+			r.executePostFilters(hContext)
 			return
 		}
 		// no match
@@ -271,6 +272,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		fileExists, filename := r.shouldServeStaticFile(respWriter, req, cleanPath)
 		if fileExists {
 			ServeFile(hContext, filename, http.StatusOK)
+			r.executePostFilters(hContext)
 			return
 		}
 	}
@@ -283,7 +285,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if match.CatchAllValue != "" {
 		hContext.CatchAllValue = match.CatchAllValue
 	}
-	handler(hContext)
+	handler.Serve(hContext)
 	r.executePostFilters(hContext)
 }
 
@@ -304,8 +306,16 @@ func (r *Router) shouldServeStaticFile(w http.ResponseWriter, req *http.Request,
 				}
 			}
 			filename := filepath.Join(staticDir.root, seekPath)
-			_, statErr := os.Stat(filename)
+			fileInfo, statErr := os.Stat(filename)
 			if statErr == nil {
+				if fileInfo.IsDir() {
+					indexFilename := filepath.Join(filename, "index.html")
+					_, indexStatErr := os.Stat(indexFilename)
+					if indexStatErr != nil {
+						return false, ""
+					}
+					return true, indexFilename
+				}
 				return true, filename
 			}
 		}
@@ -325,13 +335,13 @@ func (r *Router) emitError(context *HandlerContext, statusCode int, errMessage s
 	// try to call specific error handler
 	errHandler := r.errorHandlers[statusCode]
 	if errHandler != nil {
-		errHandler(context)
+		errHandler.Serve(context)
 		r.executePostFilters(context)
 		return
 	}
 	// if generic error handler defined, call that
 	if r.errorHandler != nil {
-		r.errorHandler(context)
+		r.errorHandler.Serve(context)
 		r.executePostFilters(context)
 		return
 	}
@@ -372,6 +382,7 @@ func (r *Router) recoverPanic(handlerContext *HandlerContext) {
 			message = "Panic! Please check the 'error' value for details"
 			err = errors.New(message)
 		}
+		debug.PrintStack()
 		routingErr := RoutingError{
 			ErrorCode:  ErrorCodePanic,
 			StatusCode: http.StatusInternalServerError,
@@ -382,7 +393,7 @@ func (r *Router) recoverPanic(handlerContext *HandlerContext) {
 			},
 		}
 		handlerContext.Errors = append(handlerContext.Errors, routingErr)
-		r.errorHandler(handlerContext)
+		r.errorHandler.Serve(handlerContext)
 	}
 }
 

@@ -30,7 +30,7 @@ type DomainMap struct {
 	hasWildcard          bool
 
 	// NotFoundHandler - if the (sub)domain is not mapped, call this handler
-	NotFoundHandler ContextHandler
+	NotFoundHandler ContextHandlerFunc
 }
 
 // NewDomainMap - creates a new domain map for the provided domains

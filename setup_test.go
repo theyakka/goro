@@ -29,26 +29,26 @@ func TestMain(m *testing.M) {
 	haltHandlers := []goro.ChainHandler{chainHandler1, chainHandler2, testHaltHandler, chainHandler3}
 	chainErrorHandlers := []goro.ChainHandler{chainHandler1, chainHandler2, testErrorChainHandler, chainHandler3}
 
-	router.SetErrorHandler(777, chainCustomErrorHandler)
+	router.SetErrorHandler(777, goro.ContextHandlerFunc(chainCustomErrorHandler))
 	router.SetStringVariable("color", "blue")
 	// router tests
-	router.GET("/").Handle(testHandler)
-	router.GET("/users/:id").Handle(testParamsHandler)
-	router.GET("/users/:id/action/:action").Handle(testParamsHandler)
-	router.GET("/colors/$color").Handle(testHandler)
+	router.GET("/").HandleFunc(testHandler)
+	router.GET("/users/:id").HandleFunc(testParamsHandler)
+	router.GET("/users/:id/action/:action").HandleFunc(testParamsHandler)
+	router.GET("/colors/$color").HandleFunc(testHandler)
 	// route groups
 	apiGroup := router.Group("/api")
 	v1Group := apiGroup.Group("/v1")
-	v1Group.GET("/").Handle(testHandler)
-	v1Group.POST("/").Handle(testHandler)
-	v1Group.GET("/stats").Handle(testHandler)
+	v1Group.GET("/").HandleFunc(testHandler)
+	v1Group.POST("/").HandleFunc(testHandler)
+	v1Group.GET("/stats").HandleFunc(testHandler)
 	apiDocsGroup := v1Group.Group("/docs")
-	apiDocsGroup.GET("/stats").Handle(testHandler)
+	apiDocsGroup.GET("/stats").HandleFunc(testHandler)
 	// chain tests
-	router.GET("/chain/simple").Handle(router.HC(chainHandlers...).Call())
-	router.GET("/chain/then").Handle(router.HC(chainHandlers...).Then(testThenHandler))
-	router.GET("/chain/halt").Handle(router.HC(haltHandlers...).Call())
-	router.GET("/chain/error").Handle(router.HC(chainErrorHandlers...).Then(testThenHandler))
+	router.GET("/chain/simple").HandleFunc(router.HC(chainHandlers...).Call())
+	router.GET("/chain/then").HandleFunc(router.HC(chainHandlers...).Then(testThenHandler))
+	router.GET("/chain/halt").HandleFunc(router.HC(haltHandlers...).Call())
+	router.GET("/chain/error").HandleFunc(router.HC(chainErrorHandlers...).Then(testThenHandler))
 	if printDebug {
 		router.PrintRoutes()
 	}

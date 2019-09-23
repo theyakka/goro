@@ -15,9 +15,6 @@ import (
 	"os"
 )
 
-// ContextHandler - the standard Goro handler
-type ContextHandler func(ctx *HandlerContext)
-
 // logger - shared logger instance
 var logger *log.Logger
 

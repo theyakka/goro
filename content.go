@@ -10,6 +10,7 @@
 package goro
 
 import (
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -64,6 +65,9 @@ func ServeFile(ctx *HandlerContext, filename string, statusCode int) {
 		return
 	}
 	// serve the file
+	ext := strings.ToLower(filepath.Ext(filePart))
+	contentType := mime.TypeByExtension(ext)
+	ctx.ResponseWriter.Header().Add("Content-Type", contentType)
 	ctx.ResponseWriter.WriteHeader(statusCode)
 	http.ServeContent(ctx.ResponseWriter, req, fileInfo.Name(), fileInfo.ModTime(), file)
 }
