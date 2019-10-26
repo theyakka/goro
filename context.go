@@ -57,6 +57,22 @@ func (hc *HandlerContext) GetState(key string) interface{} {
 	return state
 }
 
+func (hc *HandlerContext) GetStateString(key string) interface{} {
+	stateVal := hc.GetState(key)
+	if stateString, ok := stateVal.(string); ok {
+		return stateString
+	}
+	return ""
+}
+
+func (hc *HandlerContext) GetStateInt(key string) interface{} {
+	stateVal := hc.GetState(key)
+	if stateString, ok := stateVal.(int); ok {
+		return stateString
+	}
+	return ""
+}
+
 func (hc *HandlerContext) ClearState(key string) {
 	hc.Lock()
 	hc.state[key] = nil
