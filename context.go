@@ -57,7 +57,7 @@ func (hc *HandlerContext) GetState(key string) interface{} {
 	return state
 }
 
-func (hc *HandlerContext) GetStateString(key string) interface{} {
+func (hc *HandlerContext) GetStateString(key string) string {
 	stateVal := hc.GetState(key)
 	if stateString, ok := stateVal.(string); ok {
 		return stateString
@@ -65,12 +65,12 @@ func (hc *HandlerContext) GetStateString(key string) interface{} {
 	return ""
 }
 
-func (hc *HandlerContext) GetStateInt(key string) interface{} {
+func (hc *HandlerContext) GetStateInt(key string) int {
 	stateVal := hc.GetState(key)
 	if stateString, ok := stateVal.(int); ok {
 		return stateString
 	}
-	return ""
+	return 0
 }
 
 func (hc *HandlerContext) ClearState(key string) {
